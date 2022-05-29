@@ -1,0 +1,8 @@
+N = 11
+I = 50
+J = 50
+K = 50
+T = 0.2
+NumFile = 1
+NumIter = 209
+NumiterLast = 11
