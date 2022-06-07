@@ -107,7 +107,7 @@ private:
 	long int _J;
 
 	int PML_Size = 10;
-	double sigma_max = 150;
+	double sigma_max = 40;
 
 	std::function<double(double, double, double, double)> f;
 
@@ -118,10 +118,6 @@ private:
 
 	// разностная схема для решения уравнения переноса
 	int scheme_type;
-	bool is_hybrid_scheme = true;
-	bool is_LaxWendroff_scheme = false;
-	bool is_BeamWarming_scheme = false;
-	bool is_Rusanov_scheme = false;
 
 	// внешний источник
 	void F();
@@ -146,6 +142,7 @@ private:
 	void _PML_solve_system_eq(const long int& index, const Vars& umm, const Vars& um, const Vars& u, const Vars& up, const Vars& upp, const double& demp);
 
 	double _get_alpha(const double& sigma, const double& _deltap, const double& _deltam);
+	double _PML_get_alpha(const double& sigma, const double& _deltap, const double& _deltam);
 
 	void _make_step_X();
 	void _make_step_Y();

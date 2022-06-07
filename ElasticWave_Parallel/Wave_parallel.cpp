@@ -16,11 +16,11 @@ void Wave3d::F()
                     //printf("rank = %d f: (%d, %d, %d) f = %f\n", rank, starts_f[0] + i - starti_rw, starts_f[1] + j - startj_rw, k - 2 - PML_Size, _f);
                     //w_rank_curr[index].u_x += _f;
                     //w_rank_curr[index].u_y += _f;
-                    //w_rank_curr[index].u_z += _f;
+                    w_rank_curr[index].u_z += _f;
 
-                    w_rank_curr[index].sigma_xx += _f;
-                    w_rank_curr[index].sigma_yy += _f;
-                    w_rank_curr[index].sigma_zz += _f;
+                    //w_rank_curr[index].sigma_xx += _f;
+                    //w_rank_curr[index].sigma_yy += _f;
+                    //w_rank_curr[index].sigma_zz += _f;
 
                     //w_rank_curr[index].sigma_xy += _f;
                     //w_rank_curr[index].sigma_yz += _f;
@@ -219,96 +219,102 @@ void Wave3d::_PML_transfer_eq_z(const long int& index, const double& demp)
 
 void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars& um, const Vars& u, const Vars& up, const Vars& upp)
 {
-    //double vp = 2. / (1. / v_p[index] + 1. / v_p[index + _I]);
-    //double vs = 2. / (1. / v_s[index] + 1. / v_s[index + _I]);
+    Vars g_next;
     double vp = v_p[index];
     double vs = v_s[index];
 
-    double sigma; // число Куранта 
     double deltam; // delta -1
     double delta0; // delta 0
     double deltap; // delta +1
     double alpha;
 
+    // число Куранта 
+    double sigma_vs = vs * tau / h;
+    double sigma_vp = vp * tau / h;
+
     // 1-e уравнение переноса
     // lambda = -vp
-    sigma = vp * tau / h;
     deltam = upp.u_x - up.u_x; // delta -1
     delta0 = up.u_x - u.u_x; // delta 0
     deltap = u.u_x - um.u_x; // delta +1
 
-    if (delta0 != 0)
+    if (delta0 != 0.)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        g_rank_next[index].u_x = g_rank_curr[index].u_x + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        alpha = this->_get_alpha(sigma_vp, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].u_x = g_rank_curr[index].u_x;
+    {
+        // Схема Русанова
+        alpha = sigma_vp * (sigma_vp * sigma_vp - 1.) / 6.;
+    }
+
+    g_next.u_x = u.u_x + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
     // 2-e уравнение переноса
     // lambda = -vs
-    sigma = vs * tau / h;
     deltam = upp.u_y - up.u_y; // delta -1
     delta0 = up.u_y - u.u_y; // delta 0
     deltap = u.u_y - um.u_y; // delta +1
 
-    if (delta0 != 0)
+    if (delta0 != 0.)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        g_rank_next[index].u_y = g_rank_curr[index].u_y + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        alpha = this->_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].u_y = g_rank_curr[index].u_y;
+    {
+        // Схема Русанова
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    g_next.u_y = u.u_y + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
     // 3-e уравнение переноса
     // lambda = -vs
-    //sigma = vs * tau / h;
     deltam = upp.u_z - up.u_z; // delta -1
     delta0 = up.u_z - u.u_z; // delta 0
     deltap = u.u_z - um.u_z; // delta +1
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        g_rank_next[index].u_z = g_rank_curr[index].u_z + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        alpha = this->_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].u_z = g_rank_curr[index].u_z;
+    {
+        // Схема Русанова
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    g_next.u_z = u.u_z + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
     // 4-e уравнение переноса
     // lambda = 0
-    g_rank_next[index].sigma_xx = g_rank_curr[index].sigma_xx;
+    g_next.sigma_xx = u.sigma_xx;
 
     // 5-e уравнение переноса
     // lambda = 0
-    g_rank_next[index].sigma_yy = g_rank_curr[index].sigma_yy;
+    g_next.sigma_yy = u.sigma_yy;
 
     // 6-e уравнение переноса
     // lambda = 0
-    g_rank_next[index].sigma_zz = g_rank_curr[index].sigma_zz;
-
-
-    //vp = 4. / (1. / v_p[index - 2 * _I] + 1. / v_p[index - _I] + 1. / v_p[index] + 1. / v_p[index + _I]);
-    //vs = 4. / (1. / v_s[index - 2 * _I] + 1. / v_s[index - _I] + 1. / v_s[index] + 1. / v_s[index + _I]);
-    vp = 2. / (1. / v_p[index] + 1. / v_p[index - _I]);
-    vs = 2. / (1. / v_s[index] + 1. / v_s[index - _I]);
-    // double vp = v_p[index];
-    // double vs = v_s[index];
+    g_next.sigma_zz = u.sigma_zz;
 
     // 7e уравнение переноса
     // lambda = vs
-    sigma = vs * tau / h;
     deltam = umm.sigma_xy - um.sigma_xy; // delta -1
     delta0 = um.sigma_xy - u.sigma_xy; // delta 0
     deltap = u.sigma_xy - up.sigma_xy; // delta +1
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        g_rank_next[index].sigma_xy = g_rank_curr[index].sigma_xy + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        alpha = this->_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].sigma_xy = g_rank_curr[index].sigma_xy;
+    {
+        // Схема Русанова
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    g_next.sigma_xy = u.sigma_xy + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
     // 8e уравнение переноса
     // lambda = vs
@@ -319,102 +325,120 @@ void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        g_rank_next[index].sigma_yz = g_rank_curr[index].sigma_yz + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        alpha = this->_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].sigma_yz = g_rank_curr[index].sigma_yz;
+    {
+        // Схема Русанова
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    g_next.sigma_yz = u.sigma_yz + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
     // 9e уравнение переноса
     // lambda = vp
-    sigma = vp * tau / h;
     deltam = umm.sigma_zx - um.sigma_zx; // delta -1
     delta0 = um.sigma_zx - u.sigma_zx; // delta 0
     deltap = u.sigma_zx - up.sigma_zx; // delta +1
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        g_rank_next[index].sigma_zx = g_rank_curr[index].sigma_zx + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        alpha = this->_get_alpha(sigma_vp, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].sigma_zx = g_rank_curr[index].sigma_zx;
+    {
+        // Схема Русанова
+        alpha = sigma_vp * (sigma_vp * sigma_vp - 1.) / 6.;
+    }
+
+    g_next.sigma_zx = u.sigma_zx + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+
+    g_rank_next[index] = g_next;
 }
 
 void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const Vars& um, const Vars& u, const Vars& up, const Vars& upp, const double& demp)
 {
-    //double vp = 2. / (1. / v_p[index] + 1. / v_p[index + _I]);
-    //double vs = 2. / (1. / v_s[index] + 1. / v_s[index + _I]);
+    Vars g_next;
     double vp = v_p[index];
     double vs = v_s[index];
 
-    double sigma; // число Куранта 
     double deltam; // delta -1
     double delta0; // delta 0
     double deltap; // delta +1
     double alpha;
+
+    // число Куранта 
+    double sigma_vs = vs * tau / h;
+    double sigma_vp = vp * tau / h;
 
     double coeff = 1. - tau * demp;
 
     // 1-e уравнение переноса
     // lambda = -vp
-    sigma = vp * tau / h;
     deltam = upp.u_x - up.u_x; // delta -1
     delta0 = up.u_x - u.u_x; // delta 0
     deltap = u.u_x - um.u_x; // delta +1
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        switch (this->scheme_type)
-        {
-        case 0: // Схема Лакса-Вендорффа
-            g_rank_next[index].u_x = u.u_x * coeff
-                + 0.5 * sigma * (delta0 * coeff + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 1: // Схема Бима-Уорминга
-            g_rank_next[index].u_x = u.u_x * (1. - 1.5 * tau * demp)
-                + 0.5 * sigma * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 2: // Схема Руснова
-            g_rank_next[index].u_x = u.u_x * coeff
-                + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
-                - 0.25 * sigma * tau * demp * (delta0 + deltap) - tau * sigma * sigma * demp * (deltam - deltap) / 12.;
-            break;
-        }
+        alpha = this->_PML_get_alpha(sigma_vp, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].u_x = u.u_x * coeff;
+    {
+        // Схема Русанова
+        alpha = sigma_vp * (sigma_vp * sigma_vp - 1.) / 6.;
+    }
+    
+    switch (this->scheme_type)
+    {
+    case 0: // Схема Лакса-Вендорффа
+        g_next.u_x = u.u_x * coeff
+            + 0.5 * sigma_vp * (delta0 * coeff + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 1: // Схема Бима-Уорминга
+        g_next.u_x = u.u_x * (1. - 1.5 * tau * demp)
+            + 0.5 * sigma_vp * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 2: // Схема Руснова
+        g_next.u_x = u.u_x * coeff
+            + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
+            - 0.25 * sigma_vp * tau * demp * (delta0 + deltap) - tau * sigma_vp * sigma_vp * demp * (deltam - deltap) / 12.;
+        break;
+    }
 
     // 2-e уравнение переноса
     // lambda = -vs
-    sigma = vs * tau / h;
     deltam = upp.u_y - up.u_y; // delta -1
     delta0 = up.u_y - u.u_y; // delta 0
     deltap = u.u_y - um.u_y; // delta +1
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        switch (this->scheme_type)
-        {
-        case 0: // Схема Лакса-Вендорффа
-            g_rank_next[index].u_y = u.u_y * coeff
-                + 0.5 * sigma * (delta0 * coeff + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 1: // Схема Бима-Уорминга
-            g_rank_next[index].u_y = u.u_y * (1. - 1.5 * tau * demp)
-                + 0.5 * sigma * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 2: // Схема Руснова
-            g_rank_next[index].u_y = u.u_y * coeff
-                + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
-                - 0.25 * sigma * tau * demp * (delta0 + deltap) - tau * sigma * sigma * demp * (deltam - deltap) / 12.;
-            break;
-        }
+        alpha = this->_PML_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].u_y = u.u_y * coeff;
+    {
+        // Схема Русанова
+        this->scheme_type = 2;
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    switch (this->scheme_type)
+    {
+    case 0: // Схема Лакса-Вендорффа
+        g_next.u_y = u.u_y * coeff
+            + 0.5 * sigma_vs * (delta0 * coeff + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 1: // Схема Бима-Уорминга
+        g_next.u_y = u.u_y * (1. - 1.5 * tau * demp)
+            + 0.5 * sigma_vs * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 2: // Схема Руснова
+        g_next.u_y = u.u_y * coeff
+            + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
+            - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
+        break;
+    }
 
     // 3-e уравнение переноса
     // lambda = -vs
@@ -425,76 +449,77 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        switch (this->scheme_type)
-        {
-        case 0: // Схема Лакса-Вендорффа
-            g_rank_next[index].u_z = u.u_z * coeff
-                + 0.5 * sigma * (delta0 * coeff + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 1: // Схема Бима-Уорминга
-            g_rank_next[index].u_z = u.u_z * (1. - 1.5 * tau * demp)
-                + 0.5 * sigma * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 2: // Схема Руснова
-            g_rank_next[index].u_z = u.u_z * coeff
-                + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
-                - 0.25 * sigma * tau * demp * (delta0 + deltap) - tau * sigma * sigma * demp * (deltam - deltap) / 12.;
-            break;
-        }
+        alpha = this->_PML_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].u_z = u.u_z * coeff;
+    {
+        // Схема Русанова
+        this->scheme_type = 2;
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    switch (this->scheme_type)
+    {
+    case 0: // Схема Лакса-Вендорффа
+        g_next.u_z = u.u_z * coeff
+            + 0.5 * sigma_vs * (delta0 * coeff + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 1: // Схема Бима-Уорминга
+        g_next.u_z = u.u_z * (1. - 1.5 * tau * demp)
+            + 0.5 * sigma_vs * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 2: // Схема Руснова
+        g_next.u_z = u.u_z * coeff
+            + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
+            - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
+        break;
+    }
 
     // 4-e уравнение переноса
     // lambda = 0
-    g_rank_next[index].sigma_xx = u.sigma_xx * coeff;
+    g_next.sigma_xx = u.sigma_xx * coeff;
 
     // 5-e уравнение переноса
     // lambda = 0
-    g_rank_next[index].sigma_yy = u.sigma_yy * coeff;
+    g_next.sigma_yy = u.sigma_yy * coeff;
 
     // 6-e уравнение переноса
     // lambda = 0
-    g_rank_next[index].sigma_zz = u.sigma_zz * coeff;
-
-
-    //vp = 4. / (1. / v_p[index - 2 * _I] + 1. / v_p[index - _I] + 1. / v_p[index] + 1. / v_p[index + _I]);
-    //vs = 4. / (1. / v_s[index - 2 * _I] + 1. / v_s[index - _I] + 1. / v_s[index] + 1. / v_s[index + _I]);
-    //vp = 2. / (1. / v_p[index] + 1. / v_p[index - _I]);
-    //vs = 2. / (1. / v_s[index] + 1. / v_s[index - _I]);
-    // double vp = v_p[index];
-    // double vs = v_s[index];
+    g_next.sigma_zz = u.sigma_zz * coeff;
 
     // 7e уравнение переноса
     // lambda = vs
-    sigma = vs * tau / h;
     deltam = umm.sigma_xy - um.sigma_xy; // delta -1
     delta0 = um.sigma_xy - u.sigma_xy; // delta 0
     deltap = u.sigma_xy - up.sigma_xy; // delta +1
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        switch (this->scheme_type)
-        {
-        case 0: // Схема Лакса-Вендорффа
-            g_rank_next[index].sigma_xy = u.sigma_xy * coeff
-                + 0.5 * sigma * (delta0 * coeff + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 1: // Схема Бима-Уорминга
-            g_rank_next[index].sigma_xy = u.sigma_xy * (1. - 1.5 * tau * demp)
-                + 0.5 * sigma * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 2: // Схема Руснова
-            g_rank_next[index].sigma_xy = u.sigma_xy * coeff
-                + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
-                - 0.25 * sigma * tau * demp * (delta0 + deltap) - tau * sigma * sigma * demp * (deltam - deltap) / 12.;
-            break;
-        }
+        alpha = this->_PML_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].sigma_xy = u.sigma_xy * coeff;
+    {
+        // Схема Русанова
+        this->scheme_type = 2;
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    switch (this->scheme_type)
+    {
+    case 0: // Схема Лакса-Вендорффа
+        g_next.sigma_xy = u.sigma_xy * coeff
+            + 0.5 * sigma_vs * (delta0 * coeff + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 1: // Схема Бима-Уорминга
+        g_next.sigma_xy = u.sigma_xy * (1. - 1.5 * tau * demp)
+            + 0.5 * sigma_vs * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 2: // Схема Руснова
+        g_next.sigma_xy = u.sigma_xy * coeff
+            + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
+            - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
+        break;
+    }
 
     // 8e уравнение переноса
     // lambda = vs
@@ -505,96 +530,118 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
 
     if (delta0 != 0)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        switch (this->scheme_type)
-        {
-        case 0: // Схема Лакса-Вендорффа
-            g_rank_next[index].sigma_yz = u.sigma_yz * coeff
-                + 0.5 * sigma * (delta0 * coeff + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 1: // Схема Бима-Уорминга
-            g_rank_next[index].sigma_yz = u.sigma_yz * (1. - 1.5 * tau * demp)
-                + 0.5 * sigma * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 2: // Схема Руснова
-            g_rank_next[index].sigma_yz = u.sigma_yz * coeff
-                + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
-                - 0.25 * sigma * tau * demp * (delta0 + deltap) - tau * sigma * sigma * demp * (deltam - deltap) / 12.;
-            break;
-        }
+        alpha = this->_PML_get_alpha(sigma_vs, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].sigma_yz = u.sigma_yz * coeff;
+    {
+        // Схема Русанова
+        this->scheme_type = 2;
+        alpha = sigma_vs * (sigma_vs * sigma_vs - 1.) / 6.;
+    }
+
+    switch (this->scheme_type)
+    {
+    case 0: // Схема Лакса-Вендорффа
+        g_next.sigma_yz = u.sigma_yz * coeff
+            + 0.5 * sigma_vs * (delta0 * coeff + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 1: // Схема Бима-Уорминга
+        g_next.sigma_yz = u.sigma_yz * (1. - 1.5 * tau * demp)
+            + 0.5 * sigma_vs * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 2: // Схема Руснова
+        g_next.sigma_yz = u.sigma_yz * coeff
+            + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
+            - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
+        break;
+    }
 
     // 9e уравнение переноса
     // lambda = vp
-    sigma = vp * tau / h;
     deltam = umm.sigma_zx - um.sigma_zx; // delta -1
     delta0 = um.sigma_zx - u.sigma_zx; // delta 0
     deltap = u.sigma_zx - up.sigma_zx; // delta +1
 
-    if (delta0 != 0)
+    if (delta0 != 0.)
     {
-        alpha = this->_get_alpha(sigma, deltap / delta0, deltam / delta0);
-        switch (this->scheme_type)
-        {
-        case 0: // Схема Лакса-Вендорффа
-            g_rank_next[index].sigma_zx = u.sigma_zx * coeff
-                + 0.5 * sigma * (delta0 * coeff + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 1: // Схема Бима-Уорминга
-            g_rank_next[index].sigma_zx = u.sigma_zx * (1. - 1.5 * tau * demp)
-                + 0.5 * sigma * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
-            break;
-        case 2: // Схема Руснова
-            g_rank_next[index].sigma_zx = u.sigma_zx * coeff
-                + 0.5 * sigma * (delta0 + deltap) + 0.5 * sigma * sigma * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
-                - 0.25 * sigma * tau * demp * (delta0 + deltap) - tau * sigma * sigma * demp * (deltam - deltap) / 12.;
-            break;
-        }
+        alpha = this->_PML_get_alpha(sigma_vp, deltap / delta0, deltam / delta0);
     }
     else
-        g_rank_next[index].sigma_zx = u.sigma_zx * coeff;
+    {
+        // Схема Русанова
+        this->scheme_type = 2;
+        alpha = sigma_vp * (sigma_vp * sigma_vp - 1.) / 6.;
+    }
+
+    switch (this->scheme_type)
+    {
+    case 0: // Схема Лакса-Вендорффа
+        g_next.sigma_zx = u.sigma_zx * coeff
+            + 0.5 * sigma_vp * (delta0 * coeff + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 1: // Схема Бима-Уорминга
+        g_next.sigma_zx = u.sigma_zx * (1. - 1.5 * tau * demp)
+            + 0.5 * sigma_vp * (delta0 * (1. - 2. * tau * demp) + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+        break;
+    case 2: // Схема Руснова
+        g_next.sigma_zx = u.sigma_zx * coeff
+            + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
+            - 0.25 * sigma_vp * tau * demp * (delta0 + deltap) - tau * sigma_vp * sigma_vp * demp * (deltam - deltap) / 12.;
+        break;
+    }
+
+    g_rank_next[index] = g_next;
 }
 
 double Wave3d::_get_alpha(const double& sigma, const double& _deltap, const double& _deltam)
 {
-    if (this->is_hybrid_scheme) // гибридная схема (практически отсутствуют "паразитная" дисперсия, вносимая разностной схемой)
-    {
-        double coeff, w;
-        w = sigma * (1. + sigma) * 0.5 + _deltap * sigma * (1. - sigma) * 0.5;
-        if ((w >= 0.) && (w <= 1.))
-        {
-            this->scheme_type = 0;
-            return 0.; // схема Лакса-Вендроффа
-        }
+    double coeff, w;
 
-        w = sigma * (3. - sigma) * 0.5 + _deltam * sigma * (sigma - 1.) * 0.5;
-        if ((w >= 0.) && (w <= 1.))
-        {
-            this->scheme_type = 1;
-            return 0.5 * sigma * (sigma - 1.); // схема Бима-Уорминга
-        }
+    coeff = sigma * (sigma * sigma - 1.) / 6.;
+    w = 0.5 * sigma * (1. + _deltap) + 0.5 * sigma * sigma * (1. - _deltap) + coeff * (_deltam + _deltap - 2.);
+    if ((w >= 0.) && (w <= 1.))
+    {
+        return coeff; // Схема Русанова
+    }
 
-        coeff = sigma * (sigma * sigma - 1.) / 6.;
-        w = 0.5 * sigma * (1. + _deltap) + 0.5 * sigma * sigma * (1. - _deltap) + coeff * (_deltam + _deltap - 2.);
-        if ((w >= 0.) && (w <= 1.))
-        {
-            this->scheme_type = 2;
-            return coeff; // схема Схема Русанова
-        }
-    }
-    else if (this->is_LaxWendroff_scheme)
+    w = sigma * (1. + sigma) * 0.5 + _deltap * sigma * (1. - sigma) * 0.5;
+    if ((w >= 0.) && (w <= 1.))
     {
-        return 0.;
+        return 0.; // Схема Лакса-Вендроффа
     }
-    else if (this->is_BeamWarming_scheme)
+
+    w = sigma * (3. - sigma) * 0.5 + _deltam * sigma * (sigma - 1.) * 0.5;
+    if ((w >= 0.) && (w <= 1.))
     {
-        return sigma * (sigma - 1.) / 2.;
+        return 0.5 * sigma * (sigma - 1.); // Схема Бима-Уорминга
     }
-    else if (this->is_Rusanov_scheme)
+
+    return sigma * (sigma * sigma - 1.) / 6.;
+}
+
+double Wave3d::_PML_get_alpha(const double& sigma, const double& _deltap, const double& _deltam)
+{
+    double coeff, w;
+    coeff = sigma * (sigma * sigma - 1.) / 6.;
+    w = 0.5 * sigma * (1. + _deltap) + 0.5 * sigma * sigma * (1. - _deltap) + coeff * (_deltam + _deltap - 2.);
+    if ((w >= 0.) && (w <= 1.))
     {
-        return sigma * (sigma * sigma - 1.) / 6.;
+        this->scheme_type = 2;
+        return coeff; // схема Схема Русанова
+    }
+
+    w = sigma * (1. + sigma) * 0.5 + _deltap * sigma * (1. - sigma) * 0.5;
+    if ((w >= 0.) && (w <= 1.))
+    {
+        this->scheme_type = 0;
+        return 0.; // схема Лакса-Вендроффа
+    }
+
+    w = sigma * (3. - sigma) * 0.5 + _deltam * sigma * (sigma - 1.) * 0.5;
+    if ((w >= 0.) && (w <= 1.))
+    {
+        this->scheme_type = 1;
+        return 0.5 * sigma * (sigma - 1.); // схема Бима-Уорминга
     }
 
     this->scheme_type = 2;
@@ -658,7 +705,8 @@ void Wave3d::_make_step_X()
         communicator, MPI_STATUS_IGNORE);
 
     // Решение по монотонным разностным схемам сеточно-характеристическим методом
-
+    long int start_i = 2;
+    long int end_i = _size_i - 2;
     // Корректная работа в предположении, что декомпозиция по направлению x проводилась минимум на 2 процесса,
     // т.е область поделилась хотя бы на две под области в данном направлении.
     // Так же, размер подобласти по направлению x больше, чем размер PML - области (обычно PML - 10-15 узлов)
@@ -671,43 +719,18 @@ void Wave3d::_make_step_X()
                 // Расчет внутри PML 
                 for (long int i = 2; i < 2 + PML_Size; ++i)
                 {
+                    index = i * _I + j * _J + k;
                     // Демпфирующая функция d(s)
-                    double demp = static_cast<double>(PML_Size - (i - 2)) / static_cast<double>(PML_Size) * sigma_max;
+                    double demp = static_cast<double>(PML_Size - (i - 2)) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
 
                     // Решение 9-ти независымых уравнений переноса в PML области
                     //this->_PML_transfer_eq_x(i * _I + j * _J + k, demp);
-                    index = i * _I + j * _J + k;
+                    //index = i * _I + j * _J + k;
                     this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I], demp);
                 }
 
-                // Расчет внутри исходной вычислительной области
-                for (long int i = 2 + PML_Size; i < _size_i - 2; ++i)
-                {
-                    // Решение 9-ти независымых уравнений переноса
-                    //this->_transfer_eq_x(i * _I + j * _J + k);
-                    index = i * _I + j * _J + k;
-                    this->_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I]);
-                }
-            }
-        }
-    }
-
-    // PML область рассчитывается в процессах, чья подобласть примыкает к границе по оси x.
-    // Остальные процессы производят рассчет внутри исходной области
-    if ((rank_coords[0] != 0) && (rank_coords[0] != dims[0] - 1))
-    {
-        for (long int j = 2; j < _size_j - 2; ++j)
-        {
-            for (long int k = 2; k < _size_k - 2; ++k)
-            {
-                // Расчет внутри исходной вычислительной области
-                for (long int i = 2; i < _size_i - 2; ++i)
-                {
-                    // Решение 9-ти независымых уравнений переноса
-                    //this->_transfer_eq_x(i * _I + j * _J + k);
-                    index = i * _I + j * _J + k;
-                    this->_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I]);
-                }
+                start_i = 2 + PML_Size;
+                end_i = _size_i - 2;
             }
         }
     }
@@ -719,31 +742,44 @@ void Wave3d::_make_step_X()
         {
             for (long int k = 2; k < _size_k - 2; ++k)
             {
-                // Расчет внутри исходной вычислительной области
-                for (long int i = 2; i < _size_i - PML_Size - 2; ++i)
-                {
-                    // Решение 9-ти независымых уравнений переноса
-                    //this->_transfer_eq_x(i * _I + j * _J + k);
-                    index = i * _I + j * _J + k;
-                    this->_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I]);
-                }
+                start_i = 2;
+                end_i = _size_i - PML_Size - 2;
 
                 // Расчет внутри PML
                 for (long int i = _size_i - PML_Size - 2; i < _size_i - 2; ++i)
                 {
+                    index = i * _I + j * _J + k;
                     // Демпфирующая функция d(s)
-                    double demp = static_cast<double>((i + 2) - _size_i + PML_Size + 1) / static_cast<double>(PML_Size) * sigma_max;
+                    double demp = static_cast<double>((i + 2) - _size_i + PML_Size + 1) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
 
                     // Решение 9-ти независымых уравнений переноса в PML области
                     //this->_PML_transfer_eq_x(i * _I + j * _J + k, demp);
-                    index = i * _I + j * _J + k;
+                    //index = i * _I + j * _J + k;
                     this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I], demp);
                 }
             }
         }
     }
 
-    // обратная замена - переход от характеристической системы к исходной
+    // PML область рассчитывается в процессах, чья подобласть примыкает к границе по оси x.
+    // Остальные процессы производят рассчет внутри исходной области
+    for (long int j = 2; j < _size_j - 2; ++j)
+    {
+        for (long int k = 2; k < _size_k - 2; ++k)
+        {
+            // Расчет внутри исходной вычислительной области
+            for (long int i = start_i; i < end_i; ++i)
+            {
+                // Решение 9-ти независымых уравнений переноса
+                //this->_transfer_eq_x(i * _I + j * _J + k);
+                index = i * _I + j * _J + k;
+                this->_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I]);
+            }
+        }
+    }
+    
+
+    // Обратная замена - переход от характеристической системы к исходной
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -756,6 +792,193 @@ void Wave3d::_make_step_X()
             }
         }
     }
+
+
+    // Контактные условия - контактный корректор полного слипания
+    for (int i = 2; i < _size_i - 2; ++i)
+    {
+        for (int j = 2; j < _size_j - 2; ++j)
+        {
+            for (int k = 2; k < _size_k - 2; ++k)
+            {
+                index = i * _I + j * _J + k;
+                if (v_p[index] != v_p[index - _I])
+                {
+                    double vp_a = v_p[index - _I];
+                    double vs_a = v_s[index - _I];
+                    double rho_a = Rho[index - _I];
+                    Vars w_a = w_rank_curr[index - _I];
+
+                    double vp_b = v_p[index];
+                    double vs_b = v_s[index];
+                    double rho_b = Rho[index];
+                    Vars w_b = w_rank_curr[index];
+
+                    double vs = v_s[index];
+                    double vp = v_p[index];
+                    double c_3 = v_p[index] * (1. - 2. * vs_b * vs_b / (vp_b * vp_b));
+
+                    double v_x = (rho_a * vp_a * w_a.u_x + rho_b * vp_b * w_b.u_x + w_a.sigma_xx - w_b.sigma_xx
+                        - (rho_a * (vp_a - vs_a) + rho_b * (vp_b - vs_b)) / (rho_a * vp_a + rho_b * vp_b)
+                        * (rho_a * vp_a * w_a.u_x + rho_b * vp_b * w_b.u_x + w_a.sigma_xx - w_b.sigma_xx)) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_y = (rho_a * vs_a * w_a.u_y + rho_b * vs_b * w_b.u_y + w_a.sigma_xy - w_b.sigma_xy) / (rho_a * vs_a + rho_b * vs_b);
+                    double v_z = (rho_a * vs_a * w_a.u_z + rho_b * vs_b * w_b.u_z + w_a.sigma_zx - w_b.sigma_zx) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double z[3];
+                    z[0] = w_rank_curr[index].u_x - v_x;
+                    z[1] = w_rank_curr[index].u_y - v_y;
+                    z[2] = w_rank_curr[index].u_z - v_z;
+
+                    w_rank_curr[index].u_x = v_x;
+                    w_rank_curr[index].u_y = v_y;
+                    w_rank_curr[index].u_z = v_z;
+
+
+                    //
+                    // по формуле граничного корректора с заданной скоростью границы
+                    // 
+                    // sigma_n+1 = sigma_in + rho * ((z * n) * ((v_p - 2v_s - c_3) * N_00 + c_3 * I) + v_s * (n (*) z + z (*) n))
+                    //                     "+" - так как контактная граница слева
+                    // (*) - тензорное произведение векторов
+                    // n = ( n_0 n_1 n_1 ) - вектор
+                    // в направлении x - n = ( 1 0 0 )
+                    // z = ( z_0 z_1 z_2 ) - вектор
+                    // 
+                    // z * n в данном случае = z_0
+                    // 
+                    //                                           | 1 0 0 |
+                    // N_00 = 1/2 * (n0 (*) n0 + n0 (*) n0)   =  | 0 0 0 |
+                    //                                           | 0 0 0 |
+                    //         | sigma_xx sigma_xy sigma_xz |
+                    // sigma = | sigma_xy sigma_yy sigma_yz |
+                    //         | sigma_xz sigma_yz sigma_zz |
+                    //     
+                    //     | 1 0 0 |
+                    // I = | 0 1 0 |
+                    //     | 0 0 0 |
+                    //                     | z_0 z_1 z_2 |   | z_0  0   0 |   | 2*z_0 z_1 z_2 |
+                    // n (*) z + z (*) n = |  0   0   0  | + | z_1  0   0 | = |  z_1   0   0  |
+                    //                     |  0   0   0  |   | z_2  0   0 |   |  z_2   0   0  |
+                    // 
+                    // sigma_n+1 - новые значения тензора напряжений после корректировки
+                    // sigma_in - значения тензора напряжений расчитанные по разностным схемам до корректировки
+                    //
+                    // 
+                    // | sigma_xx sigma_xy sigma_xz |                                       | 1 0 0 |         | 1 0 0 |           | 2*z_0 z_1 z_2 |
+                    // | sigma_xy sigma_yy sigma_yz | += rho * (z_0 * ((v_p - 2v_s - c_3) * | 0 0 0 | + c_3 * | 0 1 0 | ) + v_s * |  z_1   0   0  | )
+                    // | sigma_xz sigma_yz sigma_zz |                                       | 0 0 0 |         | 0 0 1 |           |  z_2   0   0  |
+                    //
+                    //  После раскрытия скобок получаем сследующие формулы
+                    // 
+                    // sigma_xx += rho * z_0 * v_p
+                    // sigma_yy += rho * z_0 * c_3
+                    // sigma_zz += rho * z_0 * c_3
+                    //
+                    // sigma_xy += rho * v_s * z_1
+                    // sigma_xz += rho * v_s * z_2
+                    // sigma_yz += 0
+                    //
+
+                    w_rank_curr[index].sigma_xx += rho_b * z[0] * vp_b;
+                    w_rank_curr[index].sigma_yy += rho_b * z[0] * c_3;
+                    w_rank_curr[index].sigma_zz += rho_b * z[0] * c_3;
+
+                    w_rank_curr[index].sigma_xy += rho_b * vs_b * z[1];
+                    w_rank_curr[index].sigma_zx += rho_b * vs_b * z[2];
+                    //w_rank_curr[index].sigma_yz += 0.;
+                }
+
+                if (v_p[index] != v_p[index + _I])
+                {
+                    double vp_a = v_p[index];
+                    double vs_a = v_s[index];
+                    double rho_a = Rho[index];
+                    Vars w_a = w_rank_curr[index];
+
+                    double vp_b = v_p[index + _I];
+                    double vs_b = v_s[index + _I];
+                    double rho_b = Rho[index + _I];
+                    Vars w_b = w_rank_curr[index + _I];
+
+                    double vs = v_s[index];
+                    double vp = v_p[index];
+                    double c_3 = v_p[index] * (1. - 2. * vs_a * vs_a / (vp_a * vp_a));
+
+                    double v_x = (rho_a * vp_a * w_a.u_x + rho_b * vp_b * w_b.u_x + w_b.sigma_xx - w_a.sigma_xx
+                        - (rho_a * (vp_a - vs_a) + rho_b * (vp_b - vs_b)) / (rho_a * vp_a + rho_b * vp_b)
+                        * (rho_a * vp_a * w_a.u_x + rho_b * vp_b * w_b.u_x + w_b.sigma_xx - w_a.sigma_xx)) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_y = (rho_a * vs_a * w_a.u_y + rho_b * vs_b * w_b.u_y + w_b.sigma_xy - w_a.sigma_xy) / (rho_a * vs_a + rho_b * vs_b);
+                    double v_z = (rho_a * vs_a * w_a.u_z + rho_b * vs_b * w_b.u_z + w_b.sigma_zx - w_a.sigma_zx) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double z[3];
+                    z[0] = w_rank_curr[index].u_x - v_x;
+                    z[1] = w_rank_curr[index].u_y - v_y;
+                    z[2] = w_rank_curr[index].u_z - v_z;
+
+                    w_rank_curr[index].u_x = v_x;
+                    w_rank_curr[index].u_y = v_y;
+                    w_rank_curr[index].u_z = v_z;
+
+
+                    //
+                    // по формуле граничного корректора с заданной скоростью границы
+                    // 
+                    // sigma_n+1 = sigma_in - rho * ((z * n) * ((v_p - 2v_s - c_3) * N_00 + c_3 * I) + v_s * (n (*) z + z (*) n))
+                    //                     "-" - так как контактная граница справа
+                    // (*) - тензорное произведение векторов
+                    // n = ( n_0 n_1 n_1 ) - вектор
+                    // в направлении x - n = ( 1 0 0 )
+                    // z = ( z_0 z_1 z_2 ) - вектор
+                    // 
+                    // z * n в данном случае = z_0
+                    // 
+                    //                                           | 1 0 0 |
+                    // N_00 = 1/2 * (n0 (*) n0 + n0 (*) n0)   =  | 0 0 0 |
+                    //                                           | 0 0 0 |
+                    //         | sigma_xx sigma_xy sigma_xz |
+                    // sigma = | sigma_xy sigma_yy sigma_yz |
+                    //         | sigma_xz sigma_yz sigma_zz |
+                    //     
+                    //     | 1 0 0 |
+                    // I = | 0 1 0 |
+                    //     | 0 0 0 |
+                    //                     | z_0 z_1 z_2 |   | z_0  0   0 |   | 2*z_0 z_1 z_2 |
+                    // n (*) z + z (*) n = |  0   0   0  | + | z_1  0   0 | = |  z_1   0   0  |
+                    //                     |  0   0   0  |   | z_2  0   0 |   |  z_2   0   0  |
+                    // 
+                    // sigma_n+1 - новые значения тензора напряжений после корректировки
+                    // sigma_in - значения тензора напряжений расчитанные по разностным схемам до корректировки
+                    //
+                    // 
+                    // | sigma_xx sigma_xy sigma_xz |                                       | 1 0 0 |         | 1 0 0 |           | 2*z_0 z_1 z_2 |
+                    // | sigma_xy sigma_yy sigma_yz | -= rho * (z_0 * ((v_p - 2v_s - c_3) * | 0 0 0 | + c_3 * | 0 1 0 | ) + v_s * |  z_1   0   0  | )
+                    // | sigma_xz sigma_yz sigma_zz |                                       | 0 0 0 |         | 0 0 1 |           |  z_2   0   0  |
+                    //
+                    //  После раскрытия скобок получаем сследующие формулы
+                    // 
+                    // sigma_xx -= rho * z_0 * v_p
+                    // sigma_yy -= rho * z_0 * c_3
+                    // sigma_zz -= rho * z_0 * c_3
+                    //
+                    // sigma_xy -= rho * v_s * z_1
+                    // sigma_xz -= rho * v_s * z_2
+                    // sigma_yz -= 0
+                    //
+
+                    w_rank_curr[index].sigma_xx -= rho_b * z[0] * vp_b;
+                    w_rank_curr[index].sigma_yy -= rho_b * z[0] * c_3;
+                    w_rank_curr[index].sigma_zz -= rho_b * z[0] * c_3;
+
+                    w_rank_curr[index].sigma_xy -= rho_b * vs_b * z[1];
+                    w_rank_curr[index].sigma_zx -= rho_b * vs_b * z[2];
+                    //w_rank_curr[index].sigma_yz += 0.;
+                }
+            }
+        }
+    }
+
 
     Vars w_0, w_m, w_p1, w_p2;
     // Поглащающие граничные условия по направлению x. Расчет с помощью мнимых точек на внешей границе PML области.
@@ -918,11 +1141,11 @@ void Wave3d::_make_step_Y()
         communicator, MPI_STATUS_IGNORE);
 
     // Решение по монотонным разностным схемам сеточно-характеристическим методом
-
+    long int start_j = 2;
+    long int end_j = _size_j - 2;
     // Корректная работа в предположении, что декомпозиция по направлению y проводилась минимум на 2 процесса,
     // т.е область поделилась хотя бы на две под области в данном направлении.
     // Так же, размер подобласти по направлению y больше, чем размер PML - области (обычно PML - 10-15 узлов)
-
     if (rank_coords[1] == 0)
     {
         for (long int i = 2; i < _size_i - 2; ++i)
@@ -932,44 +1155,18 @@ void Wave3d::_make_step_Y()
                 // Расчет внутри PML 
                 for (long int j = 2; j < 2 + PML_Size; ++j)
                 {
+                    index = i * _I + j * _J + k;
                     // Демпфирующая функция d(s)
-                    double demp = static_cast<double>(PML_Size - (j - 2)) / static_cast<double>(PML_Size) * sigma_max;
+                    double demp = static_cast<double>(PML_Size - (j - 2)) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
 
                     // Решение 9-ти независымых уравнений переноса в PML области
                     //this->_PML_transfer_eq_y(i * _I + j * _J + k, demp);
-                    index = i * _I + j * _J + k;
+                    //index = i * _I + j * _J + k;
                     this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _J], g_rank_curr[index - _J], g_rank_curr[index], g_rank_curr[index + _J], g_rank_curr[index + 2 * _J], demp);
                 }
 
-                // Расчет внутри исходной вычислительной области
-                for (long int j = 2 + PML_Size; j < _size_j - 2; ++j)
-                {
-                    // Решение 9-ти независымых уравнений переноса
-                    //this->_transfer_eq_y(i * _I + j * _J + k);
-                    index = i * _I + j * _J + k;
-                    this->_solve_system_eq(index, g_rank_curr[index - 2 * _J], g_rank_curr[index - _J], g_rank_curr[index], g_rank_curr[index + _J], g_rank_curr[index + 2 * _J]);
-                }
-            }
-        }
-    }
-
-    // PML область рассчитывается в процессах, чья подобласть примыкает к границе по оси j.
-    // Остальные процессы производят рассчет внутри исходной области
-    if ((rank_coords[1] != 0) && (rank_coords[1] != dims[1] - 1))
-    {
-        for (long int i = 2; i < _size_i - 2; ++i)
-        {
-            for (long int k = 2; k < _size_k - 2; ++k)
-            {
-                // Расчет внутри исходной вычислительной области
-                // индекс j - ЛОКАЛЬНЫЙ, т.е. индексация от начала до конца подобласти;
-                for (long int j = 2; j < _size_j - 2; ++j)
-                {
-                    // Решение 9-ти независымых уравнений переноса
-                    //this->_transfer_eq_y(i * _I + j * _J + k);
-                    index = i * _I + j * _J + k;
-                    this->_solve_system_eq(index, g_rank_curr[index - 2 * _J], g_rank_curr[index - _J], g_rank_curr[index], g_rank_curr[index + _J], g_rank_curr[index + 2 * _J]);
-                }
+                start_j = 2 + PML_Size;
+                end_j = _size_j - 2;
             }
         }
     }
@@ -981,26 +1178,38 @@ void Wave3d::_make_step_Y()
         {
             for (long int k = 2; k < _size_k - 2; ++k)
             {
-                // Расчет внутри исходной вычислительной области
-                for (long int j = 2; j < _size_j - PML_Size - 2; ++j)
-                {
-                    // Решение 9-ти независымых уравнений переноса
-                    //this->_transfer_eq_y(i * _I + j * _J + k);
-                    index = i * _I + j * _J + k;
-                    this->_solve_system_eq(index, g_rank_curr[index - 2 * _J], g_rank_curr[index - _J], g_rank_curr[index], g_rank_curr[index + _J], g_rank_curr[index + 2 * _J]);
-                }
+                start_j = 2;
+                end_j = _size_j - PML_Size - 2;
 
                 // Расчет внутри PML
                 for (long int j = _size_j - PML_Size - 2; j < _size_j - 2; ++j)
                 {
+                    index = i * _I + j * _J + k;
                     // Демпфирующая функция d(s)
-                    double demp = static_cast<double>((j + 2) - _size_j + PML_Size + 1) / static_cast<double>(PML_Size) * sigma_max;
+                    double demp = static_cast<double>((j + 2) - _size_j + PML_Size + 1) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
 
                     // Решение 9-ти независымых уравнений переноса в PML области
                     //this->_PML_transfer_eq_y(i * _I + j * _J + k, demp);
-                    index = i * _I + j * _J + k;
+                    //index = i * _I + j * _J + k;
                     this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _J], g_rank_curr[index - _J], g_rank_curr[index], g_rank_curr[index + _J], g_rank_curr[index + 2 * _J], demp);
                 }
+            }
+        }
+    }
+
+    // PML область рассчитывается в процессах, чья подобласть примыкает к границе по оси j.
+    // Остальные процессы производят рассчет внутри исходной области
+    for (long int i = 2; i < _size_i - 2; ++i)
+    {
+        for (long int k = 2; k < _size_k - 2; ++k)
+        {
+            // Расчет внутри исходной вычислительной области
+            for (long int j = start_j; j < end_j; ++j)
+            {
+                // Решение 9-ти независымых уравнений переноса
+                //this->_transfer_eq_y(i * _I + j * _J + k);
+                index = i * _I + j * _J + k;
+                this->_solve_system_eq(index, g_rank_curr[index - 2 * _J], g_rank_curr[index - _J], g_rank_curr[index], g_rank_curr[index + _J], g_rank_curr[index + 2 * _J]);
             }
         }
     }
@@ -1019,6 +1228,198 @@ void Wave3d::_make_step_Y()
             }
         }
     }
+
+
+    // Контактные условия - контактный корректор полного слипания
+    for (int i = 2; i < _size_i - 2; ++i)
+    {
+        for (int j = 2; j < _size_j - 2; ++j)
+        {
+            for (int k = 2; k < _size_k - 2; ++k)
+            {
+                index = i * _I + j * _J + k;
+                if (v_p[index] != v_p[index - _J])
+                {
+                    double vp_a = v_p[index - _J];
+                    double vs_a = v_s[index - _J];
+                    double rho_a = Rho[index - _J];
+                    Vars w_a = w_rank_curr[index - _J];
+
+                    double vp_b = v_p[index];
+                    double vs_b = v_s[index];
+                    double rho_b = Rho[index];
+                    Vars w_b = w_rank_curr[index];
+
+                    double vs = v_s[index];
+                    double vp = v_p[index];
+                    double c_3 = v_p[index] * (1. - 2. * vs_b * vs_b / (vp_b * vp_b));
+
+                    double v_x = (rho_a * vs_a * w_a.u_x + rho_b * vs_b * w_b.u_x + w_a.sigma_xy - w_b.sigma_xy) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_y = (rho_a * vp_a * w_a.u_y + rho_b * vp_b * w_b.u_y + w_a.sigma_yy - w_b.sigma_yy
+                        - (rho_a * (vp_a - vs_a) + rho_b * (vp_b - vs_b)) / (rho_a * vp_a + rho_b * vp_b)
+                        * (rho_a * vp_a * w_a.u_y + rho_b * vp_b * w_b.u_y + w_a.sigma_yy - w_b.sigma_yy)) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_z = (rho_a * vs_a * w_a.u_z + rho_b * vs_b * w_b.u_z + w_a.sigma_yz - w_b.sigma_yz) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double z[3];
+                    z[0] = w_b.u_x - v_x;
+                    z[1] = w_b.u_y - v_y;
+                    z[2] = w_b.u_z - v_z;
+
+                    w_b.u_x = v_x;
+                    w_b.u_y = v_y;
+                    w_b.u_z = v_z;
+
+
+                    //
+                    // по формуле граничного корректора с заданной скоростью границы
+                    // 
+                    // sigma_n+1 = sigma_in + rho * ((z * n) * ((v_p - 2v_s - c_3) * N_11 + c_3 * I) + v_s * (n (*) z + z (*) n))
+                    //                     "+" - так как контактная граница слева
+                    // (*) - тензорное произведение векторов
+                    // n = ( n_0 n_1 n_1 ) - вектор
+                    // в направлении y - n = ( 0 1 0 )
+                    // z = ( z_0 z_1 z_2 ) - вектор
+                    // 
+                    // z * n в данном случае = z_1
+                    // 
+                    //                                           | 0 0 0 |
+                    // N_11 = 1/2 * (n1 (*) n1 + n1 (*) n1)   =  | 0 1 0 |
+                    //                                           | 0 0 0 |
+                    //         | sigma_xx sigma_xy sigma_xz |
+                    // sigma = | sigma_xy sigma_yy sigma_yz |
+                    //         | sigma_xz sigma_yz sigma_zz |
+                    //     
+                    //     | 1 0 0 |
+                    // I = | 0 1 0 |
+                    //     | 0 0 1 |
+                    //                     |  0   0   0  |   |  0  z_0  0 |   |  0    z_0    0  |
+                    // n (*) z + z (*) n = | z_0 z_1 z_2 | + |  0  z_1  0 | = | z_0  2*z_1  z_2 |
+                    //                     |  0   0   0  |   |  0  z_2  0 |   |  0    z_2    0  |
+                    // 
+                    // sigma_n+1 - новые значения тензора напряжений после корректировки
+                    // sigma_in - значения тензора напряжений расчитанные по разностным схемам до корректировки
+                    //
+                    // 
+                    // | sigma_xx sigma_xy sigma_xz |                                       | 0 0 0 |         | 1 0 0 |           |  0    z_0    0  |
+                    // | sigma_xy sigma_yy sigma_yz | += rho * (z_1 * ((v_p - 2v_s - c_3) * | 0 1 0 | + c_3 * | 0 1 0 | ) + v_s * | z_0  2*z_1  z_2 | )
+                    // | sigma_xz sigma_yz sigma_zz |                                       | 0 0 0 |         | 0 0 1 |           |  0    z_2    0  |
+                    //
+                    //  После раскрытия скобок получаем сследующие формулы
+                    // 
+                    // sigma_xx += rho * z_1 * c_3
+                    // sigma_yy += rho * z_1 * v_p
+                    // sigma_zz += rho * z_1 * c_3
+                    //
+                    // sigma_xy += rho * v_s * z_0
+                    // sigma_xz += 0
+                    // sigma_yz += rho * v_s * z_2
+                    //
+
+                    w_b.sigma_xx += rho_b * z[1] * c_3;
+                    w_b.sigma_yy += rho_b * z[1] * vp_b;
+                    w_b.sigma_zz += rho_b * z[1] * c_3;
+
+                    w_b.sigma_xy += rho_b * vs_b * z[0];
+                    //w_b.sigma_zx += 0.;
+                    w_b.sigma_yz += rho_b * vs_b * z[2];
+
+                    w_rank_curr[index] = w_b;
+                }
+
+                if (v_p[index] != v_p[index + _J])
+                {
+                    double vp_a = v_p[index];
+                    double vs_a = v_s[index];
+                    double rho_a = Rho[index];
+                    Vars w_a = w_rank_curr[index];
+
+                    double vp_b = v_p[index + _J];
+                    double vs_b = v_s[index + _J];
+                    double rho_b = Rho[index + _J];
+                    Vars w_b = w_rank_curr[index + _J];
+
+                    double vs = v_s[index];
+                    double vp = v_p[index];
+                    double c_3 = v_p[index] * (1. - 2. * vs_a * vs_a / (vp_a * vp_a));
+
+                    double v_x = (rho_a * vs_a * w_a.u_x + rho_b * vs_b * w_b.u_x + w_b.sigma_xy - w_a.sigma_xy) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_y = (rho_a * vp_a * w_a.u_y + rho_b * vp_b * w_b.u_y + w_b.sigma_yy - w_a.sigma_yy
+                        - (rho_a * (vp_a - vs_a) + rho_b * (vp_b - vs_b)) / (rho_a * vp_a + rho_b * vp_b)
+                        * (rho_a * vp_a * w_a.u_y + rho_b * vp_b * w_b.u_y + w_b.sigma_yy - w_a.sigma_yy)) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_z = (rho_a * vs_a * w_a.u_z + rho_b * vs_b * w_b.u_z + w_b.sigma_yz - w_a.sigma_yz) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double z[3];
+                    z[0] = w_a.u_x - v_x;
+                    z[1] = w_a.u_y - v_y;
+                    z[2] = w_a.u_z - v_z;
+
+                    w_a.u_x = v_x;
+                    w_a.u_y = v_y;
+                    w_a.u_z = v_z;
+
+
+                    //
+                    // по формуле граничного корректора с заданной скоростью границы
+                    // 
+                    // sigma_n+1 = sigma_in - rho * ((z * n) * ((v_p - 2v_s - c_3) * N_11 + c_3 * I) + v_s * (n (*) z + z (*) n))
+                    //                     "-" - так как контактная граница справа
+                    // (*) - тензорное произведение векторов
+                    // n = ( n_0 n_1 n_1 ) - вектор
+                    // в направлении x - n = ( 0 1 0 )
+                    // z = ( z_0 z_1 z_2 ) - вектор
+                    // 
+                    // z * n в данном случае = z_1
+                    // 
+                    //                                           | 0 0 0 |
+                    // N_11 = 1/2 * (n1 (*) n1 + n1 (*) n1)   =  | 0 1 0 |
+                    //                                           | 0 0 0 |
+                    //         | sigma_xx sigma_xy sigma_xz |
+                    // sigma = | sigma_xy sigma_yy sigma_yz |
+                    //         | sigma_xz sigma_yz sigma_zz |
+                    //     
+                    //     | 1 0 0 |
+                    // I = | 0 1 0 |
+                    //     | 0 0 1 |
+                    //                     |  0   0   0  |   |  0  z_0  0 |   |  0    z_0    0  |
+                    // n (*) z + z (*) n = | z_0 z_1 z_2 | + |  0  z_1  0 | = | z_0  2*z_1  z_2 |
+                    //                     |  0   0   0  |   |  0  z_2  0 |   |  0    z_2    0  |
+                    // 
+                    // sigma_n+1 - новые значения тензора напряжений после корректировки
+                    // sigma_in - значения тензора напряжений расчитанные по разностным схемам до корректировки
+                    //
+                    // 
+                    // | sigma_xx sigma_xy sigma_xz |                                       | 0 0 0 |         | 1 0 0 |           |  0    z_0    0  |
+                    // | sigma_xy sigma_yy sigma_yz | -= rho * (z_1 * ((v_p - 2v_s - c_3) * | 0 1 0 | + c_3 * | 0 1 0 | ) + v_s * | z_0  2*z_1  z_2 | )
+                    // | sigma_xz sigma_yz sigma_zz |                                       | 0 0 0 |         | 0 0 1 |           |  0    z_2    0  |
+                    //
+                    //  После раскрытия скобок получаем сследующие формулы
+                    // 
+                    // sigma_xx -= rho * z_1 * c_3
+                    // sigma_yy -= rho * z_1 * v_p
+                    // sigma_zz -= rho * z_1 * c_3
+                    //
+                    // sigma_xy -= rho * v_s * z_0
+                    // sigma_xz -= 0
+                    // sigma_yz -= rho * v_s * z_2
+                    //
+
+                    w_a.sigma_xx -= rho_b * z[1] * c_3;
+                    w_a.sigma_yy -= rho_b * z[1] * vp_b;
+                    w_a.sigma_zz -= rho_b * z[1] * c_3;
+
+                    w_a.sigma_xy -= rho_b * vs_b * z[0];
+                    w_a.sigma_yz -= rho_b * vs_b * z[2];
+
+                    w_rank_curr[index] = w_a;
+                }
+            }
+        }
+    }
+
 
     Vars w_0, w_m, w_p1, w_p2;
     // Поглащающие граничные условия по направлению y. Расчет с помощью мнимых точек на внешей границе PML области.
@@ -1157,12 +1558,13 @@ void Wave3d::_make_step_Z()
             // Расчет внутри PML
             for (long int k = 2; k < 2 + PML_Size; ++k)
             {
+                index = i * _I + j * _J + k;
                 // Демпфирующая функция d(s)
-                double demp = static_cast<double>(PML_Size - (k - 2)) / static_cast<double>(PML_Size) * sigma_max;
+                double demp = static_cast<double>(PML_Size - (k - 2)) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
 
                 // Решение 9-ти независымых уравнений переноса в PML области
                 //this->_PML_transfer_eq_z(i * _I + j * _J + k, demp);
-                index = i * _I + j * _J + k;
+                //index = i * _I + j * _J + k;
                 this->_PML_solve_system_eq(index, g_rank_curr[index - 2], g_rank_curr[index - 1], g_rank_curr[index], g_rank_curr[index + 1], g_rank_curr[index + 2], demp);
             }
 
@@ -1180,12 +1582,13 @@ void Wave3d::_make_step_Z()
             // Расчет внутри PML
             for (long int k = 2 + I + PML_Size; k < 2 + I + 2 * PML_Size; ++k)
             {
+                index = i * _I + j * _J + k;
                 // Демпфирующая функция d(s)
-                double demp = static_cast<double>((k - 2) - I - PML_Size + 1) / static_cast<double>(PML_Size) * sigma_max;
+                double demp = static_cast<double>((k - 2) - I - PML_Size + 1) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
 
                 // Решение 9-ти независымых уравнений переноса в PML области
                 //this->_PML_transfer_eq_z(i * _I + j * _J + k, demp);
-                index = i * _I + j * _J + k;
+                //index = i * _I + j * _J + k;
                 this->_PML_solve_system_eq(index, g_rank_curr[index - 2], g_rank_curr[index - 1], g_rank_curr[index], g_rank_curr[index + 1], g_rank_curr[index + 2], demp);
             }
         }
@@ -1206,6 +1609,183 @@ void Wave3d::_make_step_Z()
         }
     }
 
+
+    // Контактные условия - контактный корректор полного слипания
+    for (int i = 2; i < _size_i - 2; ++i)
+    {
+        for (int j = 2; j < _size_j - 2; ++j)
+        {
+            for (int k = 2; k < _size_k - 2; ++k)
+            {
+                index = i * _I + j * _J + k;
+                if (v_p[index] != v_p[index - 1])
+                {
+                    double vp_a = v_p[index];
+                    double vs_a = v_s[index];
+                    double rho_a = Rho[index];
+                    Vars w_a = w_rank_curr[index];
+
+                    double vp_b = v_p[index - 1];
+                    double vs_b = v_s[index - 1];
+                    double rho_b = Rho[index - 1];
+                    Vars w_b = w_rank_curr[index - 1];
+
+                    double c_3 = vp_a - 2. * vs_a * vs_a / vp_a;
+
+                    double v_x = (rho_a * vs_a * w_a.u_x + rho_b * vs_b * w_b.u_x + w_a.sigma_zx - w_b.sigma_zx) / (rho_a * vs_a + rho_b * vs_b);
+                    double v_y = (rho_a * vs_a * w_a.u_y + rho_b * vs_b * w_b.u_y + w_a.sigma_yz - w_b.sigma_yz) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_z = (rho_a * vp_a * w_a.u_z + rho_b * vp_b * w_b.u_z + w_a.sigma_zz - w_b.sigma_zz
+                        - (rho_a * (vp_a - vs_a) + rho_b * (vp_b - vs_b)) / (rho_a * vp_a + rho_b * vp_b)
+                        * (rho_a * vp_a * w_a.u_z + rho_b * vp_b * w_b.u_z + w_a.sigma_zz - w_b.sigma_zz)) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double z[3];
+                    z[0] = w_rank_curr[index].u_x - v_x;
+                    z[1] = w_rank_curr[index].u_y - v_y;
+                    z[2] = w_rank_curr[index].u_z - v_z;
+
+                    w_rank_curr[index].u_x = v_x;
+                    w_rank_curr[index].u_y = v_y;
+                    w_rank_curr[index].u_z = v_z;
+
+                    //
+                    // по формуле граничного корректора с заданной скоростью границы
+                    // 
+                    // sigma_n+1 = sigma_in + rho * ((z * n) * ((v_p - 2v_s - c_3) * N_22 + c_3 * I) + v_s * (n (*) z + z (*) n))
+                    //                     "+" - так как контактная граница слева
+                    // (*) - тензорное произведение векторов
+                    // n = ( n_0 n_1 n_1 ) - вектор
+                    // в направлении z - n = ( 0 0 1 )
+                    // z = ( z_0 z_1 z_2 ) - вектор
+                    // 
+                    // z * n в данном случае = z_2
+                    // 
+                    //                                           | 0 0 0 |
+                    // N_22 = 1/2 * (n2 (*) n2 + n2 (*) n2)   =  | 0 0 0 |
+                    //                                           | 0 0 1 |
+                    //         | sigma_xx sigma_xy sigma_xz |
+                    // sigma = | sigma_xy sigma_yy sigma_yz |
+                    //         | sigma_xz sigma_yz sigma_zz |
+                    //     
+                    //     | 1 0 0 |
+                    // I = | 0 1 0 |
+                    //     | 0 0 1 |
+                    //                     |  0   0   0  |   |  0  0  z_0 |   |  0    0    z_0  |
+                    // n (*) z + z (*) n = |  0   0   0  | + |  0  0  z_1 | = |  0    0    z_1  |
+                    //                     | z_0 z_1 z_2 |   |  0  0  z_2 |   | z_0  z_1  2*z_2 |
+                    // 
+                    // sigma_n+1 - новые значения тензора напряжений после корректировки
+                    // sigma_in - значения тензора напряжений расчитанные по разностным схемам до корректировки
+                    //
+                    // 
+                    // | sigma_xx sigma_xy sigma_xz |                                       | 0 0 0 |         | 1 0 0 |           |  0    0    z_0  |
+                    // | sigma_xy sigma_yy sigma_yz | += rho * (z_2 * ((v_p - 2v_s - c_3) * | 0 0 0 | + c_3 * | 0 1 0 | ) + v_s * |  0    0    z_1  | )
+                    // | sigma_xz sigma_yz sigma_zz |                                       | 0 0 1 |         | 0 0 1 |           | z_0  z_1  2*z_2 |
+                    //
+                    //  После раскрытия скобок получаем сследующие формулы
+                    // 
+                    // sigma_xx += rho * z_2 * c_3
+                    // sigma_yy += rho * z_2 * c_3
+                    // sigma_zz += rho * z_2 * v_p
+                    //
+                    // sigma_xy += 0
+                    // sigma_xz += rho * v_s * z_0
+                    // sigma_yz += rho * v_s * z_1
+                    //
+
+                    w_rank_curr[index].sigma_xx += rho_a * z[2] * c_3;
+                    w_rank_curr[index].sigma_yy += rho_a * z[2] * c_3;
+                    w_rank_curr[index].sigma_zz += rho_a * z[2] * vp_a;
+
+                    w_rank_curr[index].sigma_zx += rho_a * vs_a * z[0];
+                    w_rank_curr[index].sigma_yz += rho_a * vs_a * z[1];
+                }
+
+                if (v_p[index] != v_p[index + 1])
+                {
+                    double vp_a = v_p[index];
+                    double vs_a = v_s[index];
+                    double rho_a = Rho[index];
+                    Vars w_a = w_rank_curr[index];
+
+                    double vp_b = v_p[index + 1];
+                    double vs_b = v_s[index + 1];
+                    double rho_b = Rho[index + 1];
+                    Vars w_b = w_rank_curr[index + 1];
+
+                    double c_3 = vp_a - 2. * vs_a * vs_a / vp_a;
+
+                    double v_x = (rho_a * vs_a * w_a.u_x + rho_b * vs_b * w_b.u_x + w_b.sigma_zx - w_a.sigma_zx) / (rho_a * vs_a + rho_b * vs_b);
+                    double v_y = (rho_a * vs_a * w_a.u_y + rho_b * vs_b * w_b.u_y + w_b.sigma_yz - w_a.sigma_yz) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double v_z = (rho_a * vp_a * w_a.u_z + rho_b * vp_b * w_b.u_z + w_b.sigma_zz - w_a.sigma_zz
+                        - (rho_a * (vp_a - vs_a) + rho_b * (vp_b - vs_b)) / (rho_a * vp_a + rho_b * vp_b)
+                        * (rho_a * vp_a * w_a.u_z + rho_b * vp_b * w_b.u_z + w_b.sigma_zz - w_a.sigma_zz)) / (rho_a * vs_a + rho_b * vs_b);
+
+                    double z[3];
+                    z[0] = w_rank_curr[index].u_x - v_x;
+                    z[1] = w_rank_curr[index].u_y - v_y;
+                    z[2] = w_rank_curr[index].u_z - v_z;
+
+                    w_rank_curr[index].u_x = v_x;
+                    w_rank_curr[index].u_y = v_y;
+                    w_rank_curr[index].u_z = v_z;
+
+                    //
+                    // по формуле граничного корректора с заданной скоростью границы
+                    // 
+                    // sigma_n+1 = sigma_in - rho * ((z * n) * ((v_p - 2v_s - c_3) * N_22 + c_3 * I) + v_s * (n (*) z + z (*) n))
+                    //                     "-" - так как контактная граница справа
+                    // (*) - тензорное произведение векторов
+                    // n = ( n_0 n_1 n_1 ) - вектор
+                    // в направлении x - n = ( 0 0 1 )
+                    // z = ( z_0 z_1 z_2 ) - вектор
+                    // 
+                    // z * n в данном случае = z_2
+                    // 
+                    //                                           | 0 0 0 |
+                    // N_22 = 1/2 * (n2 (*) n2 + n2 (*) n2)   =  | 0 0 0 |
+                    //                                           | 0 0 1 |
+                    //         | sigma_xx sigma_xy sigma_xz |
+                    // sigma = | sigma_xy sigma_yy sigma_yz |
+                    //         | sigma_xz sigma_yz sigma_zz |
+                    //     
+                    //     | 1 0 0 |
+                    // I = | 0 1 0 |
+                    //     | 0 0 1 |
+                    //                     |  0   0   0  |   |  0  0  z_0 |   |  0    0    z_0  |
+                    // n (*) z + z (*) n = |  0   0   0  | + |  0  0  z_1 | = |  0    0    z_1  |
+                    //                     | z_0 z_1 z_2 |   |  0  0  z_2 |   | z_0  z_1  2*z_2 |
+                    // 
+                    // sigma_n+1 - новые значения тензора напряжений после корректировки
+                    // sigma_in - значения тензора напряжений расчитанные по разностным схемам до корректировки
+                    //
+                    // 
+                    // | sigma_xx sigma_xy sigma_xz |                                       | 0 0 0 |         | 1 0 0 |           |  0    0    z_0  |
+                    // | sigma_xy sigma_yy sigma_yz | -= rho * (z_2 * ((v_p - 2v_s - c_3) * | 0 0 0 | + c_3 * | 0 1 0 | ) + v_s * |  0    0    z_1  | )
+                    // | sigma_xz sigma_yz sigma_zz |                                       | 0 0 1 |         | 0 0 1 |           | z_0  z_1  2*z_2 |
+                    //
+                    //  После раскрытия скобок получаем сследующие формулы
+                    // 
+                    // sigma_xx -= rho * z_2 * c_3
+                    // sigma_yy -= rho * z_2 * c_3
+                    // sigma_zz -= rho * z_2 * v_p
+                    //
+                    // sigma_xy -= 0
+                    // sigma_xz -= rho * v_s * z_0
+                    // sigma_yz -= rho * v_s * z_1
+                    //
+
+                    w_rank_curr[index].sigma_xx -= rho_a * z[2] * c_3;
+                    w_rank_curr[index].sigma_yy -= rho_a * z[2] * c_3;
+                    w_rank_curr[index].sigma_zz -= rho_a * z[2] * vp_a;
+
+                    w_rank_curr[index].sigma_zx -= rho_a * vs_a * z[0];
+                    w_rank_curr[index].sigma_yz -= rho_a * vs_a * z[1];
+                }
+            }
+        }
+    }
 
     Vars w_0, w_m, w_p1, w_p2;
     // Поглащающие граничные условия по направлению z. Расчет с помощью мнимых точек на внешей границе PML области
@@ -3268,7 +3848,8 @@ void Wave3d::solve()
         _make_step_Y();
         _make_step_Z();
         F();
-        _write_to_file_Abs_U();
+        //_write_to_file_Abs_U();
+        _write_to_file_Uz();
         //_write_to_file();
         ++n;
         if (n >= N)
@@ -3278,7 +3859,8 @@ void Wave3d::solve()
         _make_step_X();
         _make_step_Z();
         F();
-        _write_to_file_Abs_U();
+        //_write_to_file_Abs_U();
+        _write_to_file_Uz();
         //_write_to_file();
         ++n;
         if (n >= N)
@@ -3288,7 +3870,8 @@ void Wave3d::solve()
         _make_step_X();
         _make_step_Y();
         F();
-        _write_to_file_Abs_U();
+        //_write_to_file_Abs_U();
+        _write_to_file_Uz();
         //_write_to_file();
         ++n;
         if (n >= N)
@@ -3298,7 +3881,8 @@ void Wave3d::solve()
         _make_step_Z();
         _make_step_Y();
         F();
-        _write_to_file_Abs_U();
+        //_write_to_file_Abs_U();
+        _write_to_file_Uz();
         //_write_to_file();
         ++n;
         if (n >= N)
@@ -3308,7 +3892,8 @@ void Wave3d::solve()
         _make_step_Z();
         _make_step_X();
         F();
-        _write_to_file_Abs_U();
+        //_write_to_file_Abs_U();
+        _write_to_file_Uz();
         //_write_to_file();
         ++n;
         if (n >= N)
@@ -3318,7 +3903,8 @@ void Wave3d::solve()
         _make_step_Y();
         _make_step_X();
         F();
-        _write_to_file_Abs_U();
+        //_write_to_file_Abs_U();
+        _write_to_file_Uz();
         //_write_to_file();
         ++n;
         if (n >= N)

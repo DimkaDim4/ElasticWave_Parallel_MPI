@@ -1,14 +1,14 @@
 ﻿#include "Wave_parallel.h"
 
 double PI = 3.141592653589793;
-double v0 = 40.;
+double v0 = 30.;
 double t0 = 1. / v0;
 double h = 1. / (200 - 1.);
 
 double f(double t, double x, double y, double z)
 {
-    if ((fabs(x - 0.5) <= 0.5 * h) && (fabs(y - 0.5) <= 0.5 * h) && (fabs(z - 0.2) <= 0.5 * h) && (t <= 3. * t0))
-        return -2. * PI * v0 * sqrt(exp(1.)) * (t - t0) * exp(-2. * PI * v0 * (t - t0) * (t - t0));
+    if ((fabs(x - 0.5) <= h) && (fabs(y - 0.5) <= h) && (fabs(z - 0.00) <= h) && (t <= 2. * t0))
+        return 2. * PI * v0 * sqrt(exp(1.)) * (t0 - t) * exp(-2. * PI * PI * v0 * v0 * (t - t0) * (t - t0));
     return 0.;
 }
 
