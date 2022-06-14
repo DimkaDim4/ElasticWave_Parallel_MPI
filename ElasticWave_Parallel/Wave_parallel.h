@@ -19,6 +19,40 @@ struct Vars
 	double sigma_xy;
 	double sigma_yz;
 	double sigma_zx;
+
+	Vars & operator+=(const Vars& b)
+	{
+		u_x += b.u_x;
+		u_y += b.u_y;
+		u_z += b.u_z;
+		sigma_xx += b.sigma_xx;
+		sigma_yy += b.sigma_yy;
+		sigma_zz += b.sigma_zz;
+		sigma_xy += b.sigma_xy;
+		sigma_yz += b.sigma_yz;
+		sigma_zx += b.sigma_zx;
+		return *this;
+	}
+
+	Vars operator /(const double& b)
+	{
+		u_x /= b;
+		u_y /= b;
+		u_z /= b;
+		sigma_xx /= b;
+		sigma_yy /= b;
+		sigma_zz /= b;
+		sigma_xy /= b;
+		sigma_yz /= b;
+		sigma_zx /= b;
+		return *this;
+	}
+
+	friend Vars operator +(const Vars& rhs, const Vars& lhs)
+	{
+		Vars ret(rhs);
+		return ret += lhs;
+	}
 };
 
 class Wave3d
@@ -97,7 +131,6 @@ private:
 	double T;
 	int I;
 	int N;
-	int n;
 
 	long int _size_i;
 	long int _size_j;
@@ -106,7 +139,7 @@ private:
 	long int _I;
 	long int _J;
 
-	int PML_Size = 10;
+	int PML_Size = 15;
 	double sigma_max = 40;
 
 	std::function<double(double, double, double, double)> f;
@@ -116,11 +149,14 @@ private:
 	Vars* g_rank_curr;
 	Vars* g_rank_next;
 
+	Vars* w_curr;
+	Vars* w_next;
+
 	// разностная схема для решения уравнения переноса
 	int scheme_type;
 
 	// внешний источник
-	void F();
+	void F(const int& n);
 
 	void _change_1(const long int& index);
 	void _change_2(const long int& index);

@@ -1,6 +1,6 @@
 #include "Wave_parallel.h"
 
-void Wave3d::F()
+void Wave3d::F(const int& n)
 {
     for (int i = starti_rw; i < endi_rw; ++i)
     {
@@ -14,17 +14,17 @@ void Wave3d::F()
                 if (_f != 0.)
                 {
                     //printf("rank = %d f: (%d, %d, %d) f = %f\n", rank, starts_f[0] + i - starti_rw, starts_f[1] + j - startj_rw, k - 2 - PML_Size, _f);
-                    //w_rank_curr[index].u_x += _f;
-                    //w_rank_curr[index].u_y += _f;
-                    w_rank_curr[index].u_z += _f;
+                    //w_curr[index].u_x += _f;
+                    //w_curr[index].u_y += _f;
+                    //w_curr[index].u_z += _f;
 
-                    //w_rank_curr[index].sigma_xx += _f;
-                    //w_rank_curr[index].sigma_yy += _f;
-                    //w_rank_curr[index].sigma_zz += _f;
+                    w_curr[index].sigma_xx += _f;
+                    w_curr[index].sigma_yy += _f;
+                    w_curr[index].sigma_zz += _f;
 
-                    //w_rank_curr[index].sigma_xy += _f;
-                    //w_rank_curr[index].sigma_yz += _f;
-                    //w_rank_curr[index].sigma_zx += _f;
+                    //w_curr[index].sigma_xy += _f;
+                    //w_curr[index].sigma_yz += _f;
+                    //w_curr[index].sigma_zx += _f;
                 }
             }
         }
@@ -250,6 +250,12 @@ void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars
 
     g_next.u_x = u.u_x + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
+    // в случае если схемы второго-третьего пор€дка не €вл€ютс€ монотоннымы - вычисл€ем по монотонной схеме первого пор€дка
+    if (alpha == -1.)
+    {
+        g_next.u_x = sigma_vp * up.u_x + (1. - sigma_vp) * u.u_x;
+    }
+
     // 2-e уравнение переноса
     // lambda = -vs
     deltam = upp.u_y - up.u_y; // delta -1
@@ -268,6 +274,12 @@ void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars
 
     g_next.u_y = u.u_y + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
+    // в случае если схемы второго-третьего пор€дка не €вл€ютс€ монотоннымы - вычисл€ем по монотонной схеме первого пор€дка
+    if (alpha == -1.)
+    {
+        g_next.u_y = sigma_vs * up.u_y + (1. - sigma_vs) * u.u_y;
+    }
+
     // 3-e уравнение переноса
     // lambda = -vs
     deltam = upp.u_z - up.u_z; // delta -1
@@ -285,6 +297,12 @@ void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars
     }
 
     g_next.u_z = u.u_z + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+
+    // в случае если схемы второго-третьего пор€дка не €вл€ютс€ монотоннымы - вычисл€ем по монотонной схеме первого пор€дка
+    if (alpha == -1.)
+    {
+        g_next.u_z = sigma_vs * up.u_z + (1. - sigma_vs) * u.u_z;
+    }
 
     // 4-e уравнение переноса
     // lambda = 0
@@ -316,6 +334,12 @@ void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars
 
     g_next.sigma_xy = u.sigma_xy + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
+    // в случае если схемы второго-третьего пор€дка не €вл€ютс€ монотоннымы - вычисл€ем по монотонной схеме первого пор€дка
+    if (alpha == -1.)
+    {
+        g_next.sigma_xy = sigma_vs * um.sigma_xy + (1. - sigma_vs) * u.sigma_xy;
+    }
+
     // 8e уравнение переноса
     // lambda = vs
     //sigma = vs * tau / h;
@@ -335,6 +359,12 @@ void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars
 
     g_next.sigma_yz = u.sigma_yz + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
 
+    // в случае если схемы второго-третьего пор€дка не €вл€ютс€ монотоннымы - вычисл€ем по монотонной схеме первого пор€дка
+    if (alpha == -1.)
+    {
+        g_next.sigma_yz = sigma_vs * um.sigma_yz + (1. - sigma_vs) * u.sigma_yz;
+    }
+
     // 9e уравнение переноса
     // lambda = vp
     deltam = umm.sigma_zx - um.sigma_zx; // delta -1
@@ -352,6 +382,12 @@ void Wave3d::_solve_system_eq(const long int& index, const Vars& umm, const Vars
     }
 
     g_next.sigma_zx = u.sigma_zx + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap);
+
+    // в случае если схемы второго-третьего пор€дка не €вл€ютс€ монотоннымы - вычисл€ем по монотонной схеме первого пор€дка
+    if (alpha == -1.)
+    {
+        g_next.sigma_zx = sigma_vp * um.sigma_zx + (1. - sigma_vp) * u.sigma_zx;
+    }
 
     g_rank_next[index] = g_next;
 }
@@ -601,22 +637,27 @@ double Wave3d::_get_alpha(const double& sigma, const double& _deltap, const doub
     w = 0.5 * sigma * (1. + _deltap) + 0.5 * sigma * sigma * (1. - _deltap) + coeff * (_deltam + _deltap - 2.);
     if ((w >= 0.) && (w <= 1.))
     {
+        //printf("3");
         return coeff; // —хема –усанова
     }
 
     w = sigma * (1. + sigma) * 0.5 + _deltap * sigma * (1. - sigma) * 0.5;
     if ((w >= 0.) && (w <= 1.))
     {
+        //printf("2");
         return 0.; // —хема Ћакса-¬ендроффа
     }
 
     w = sigma * (3. - sigma) * 0.5 + _deltam * sigma * (sigma - 1.) * 0.5;
     if ((w >= 0.) && (w <= 1.))
     {
+        //printf("2");
         return 0.5 * sigma * (sigma - 1.); // —хема Ѕима-”орминга
     }
 
-    return sigma * (sigma * sigma - 1.) / 6.;
+    //printf("1");
+    return -1.;
+    //return sigma * (sigma * sigma - 1.) / 6.;
 }
 
 double Wave3d::_PML_get_alpha(const double& sigma, const double& _deltap, const double& _deltam)
@@ -1937,7 +1978,7 @@ void Wave3d::_write_to_file_Sigma()
         {
             for (int k = 2 + PML_Size; k < 2 + I + PML_Size; k++)
             {
-                v = w_rank_curr[i * _I + j * _J + k];
+                v = w_curr[i * _I + j * _J + k];
 
                 buf_rw[index] = (v.sigma_xx + v.sigma_yy + v.sigma_zz) / 3.;
                 index++;
@@ -1986,7 +2027,7 @@ void Wave3d::_write_to_file_Sigma_Okt()
         {
             for (int k = 2 + PML_Size; k < 2 + I + PML_Size; k++)
             {
-                v = w_rank_curr[i * _I + j * _J + k];
+                v = w_curr[i * _I + j * _J + k];
 
                 buf_rw[index] = sqrt(
                     (v.sigma_xx - v.sigma_yy) * (v.sigma_xx - v.sigma_yy) +
@@ -2038,7 +2079,7 @@ void Wave3d::_write_to_file_Abs_U()
         {
             for (int k = 2 + PML_Size; k < 2 + I + PML_Size; ++k)
             {
-                v = w_rank_curr[i * _I + j * _J + k];
+                v = w_curr[i * _I + j * _J + k];
 
                 buf_rw[index] = sqrt(v.u_x * v.u_x + v.u_y * v.u_y + v.u_z * v.u_z);
                 index++;
@@ -2086,7 +2127,7 @@ void Wave3d::_write_to_file_Ux()
         {
             for (int k = 2 + PML_Size; k < 2 + I + PML_Size; k++)
             {
-                buf_rw[index] = w_rank_curr[i * _I + j * _J + k].u_x;
+                buf_rw[index] = w_curr[i * _I + j * _J + k].u_x;
                 index++;
             }
         }
@@ -2132,7 +2173,7 @@ void Wave3d::_write_to_file_Uy()
         {
             for (int k = 2 + PML_Size; k < 2 + I + PML_Size; k++)
             {
-                buf_rw[index] = w_rank_curr[i * _I + j * _J + k].u_y;
+                buf_rw[index] = w_curr[i * _I + j * _J + k].u_y;
                 index++;
             }
         }
@@ -2178,7 +2219,7 @@ void Wave3d::_write_to_file_Uz()
         {
             for (int k = 2 + PML_Size; k < 2 + I + PML_Size; k++)
             {
-                buf_rw[index] = w_rank_curr[i * _I + j * _J + k].u_z;
+                buf_rw[index] = w_curr[i * _I + j * _J + k].u_z;
                 index++;
             }
         }
@@ -3777,6 +3818,9 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     g_rank_next = new Vars[_size_i * _size_j * _size_k];
     g_rank_curr = new Vars[_size_i * _size_j * _size_k];
 
+    w_next = new Vars[_size_i * _size_j * _size_k];
+    w_curr = new Vars[_size_i * _size_j * _size_k];
+
     Vars w0 = { 0., 0., 0., 0., 0., 0., 0., 0., 0. };
     index = 0;
     for (int i = 0; i < _size_i; i++)
@@ -3789,12 +3833,12 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
                 w_rank_next[index] = w0;
                 g_rank_curr[index] = w0;
                 g_rank_next[index] = w0;
-
+                w_curr[index] = w0;
+                w_next[index] = w0;
                 ++index;
             }
         }
     }
-    _write_to_file_Abs_U();
 }
 
 Wave3d::~Wave3d()
@@ -3803,6 +3847,8 @@ Wave3d::~Wave3d()
     delete[] w_rank_next;
     delete[] g_rank_curr;
     delete[] g_rank_next;
+    delete[] w_curr;
+    delete[] w_next;
     delete[] buf_rw;
     delete[] v_p;
     delete[] v_s;
@@ -3841,73 +3887,126 @@ void Wave3d::solve()
         param.close();
     }
 
-    this->n = 0;
-    while (n < N)
+    _write_to_file_Uz();
+
+    long int index;
+    for (int n = 0; n < N; n++)
     {
+        for (int i = 2; i < _size_i - 2; ++i)
+        {
+            for (int j = 2; j < _size_j - 2; ++j)
+            {
+                for (int k = 2; k < _size_k - 2; ++k)
+                {
+                    index = i * _I + j * _J + k;
+                    w_rank_curr[index] = w_curr[index];
+                }
+            }
+        }
+
         _make_step_X();
         _make_step_Y();
         _make_step_Z();
-        F();
-        //_write_to_file_Abs_U();
-        _write_to_file_Uz();
-        //_write_to_file();
-        ++n;
-        if (n >= N)
-            break;
+
+        for (int i = 2; i < _size_i - 2; ++i)
+        {
+            for (int j = 2; j < _size_j - 2; ++j)
+            {
+                for (int k = 2; k < _size_k - 2; ++k)
+                {
+                    index = i * _I + j * _J + k;
+                    w_next[index] = w_rank_curr[index] / 6.;
+                    w_rank_curr[index] = w_curr[index];
+                }
+            }
+        }
 
         _make_step_Y();
         _make_step_X();
         _make_step_Z();
-        F();
-        //_write_to_file_Abs_U();
-        _write_to_file_Uz();
-        //_write_to_file();
-        ++n;
-        if (n >= N)
-            break;
+
+        for (int i = 2; i < _size_i - 2; ++i)
+        {
+            for (int j = 2; j < _size_j - 2; ++j)
+            {
+                for (int k = 2; k < _size_k - 2; ++k)
+                {
+                    index = i * _I + j * _J + k;
+                    w_next[index] += w_rank_curr[index] / 6.;
+                    w_rank_curr[index] = w_curr[index];
+                }
+            }
+        }
 
         _make_step_Z();
         _make_step_X();
         _make_step_Y();
-        F();
-        //_write_to_file_Abs_U();
-        _write_to_file_Uz();
-        //_write_to_file();
-        ++n;
-        if (n >= N)
-            break;
+
+        for (int i = 2; i < _size_i - 2; ++i)
+        {
+            for (int j = 2; j < _size_j - 2; ++j)
+            {
+                for (int k = 2; k < _size_k - 2; ++k)
+                {
+                    index = i * _I + j * _J + k;
+                    w_next[index] += w_rank_curr[index] / 6.;
+                    w_rank_curr[index] = w_curr[index];
+                }
+            }
+        }
 
         _make_step_X();
         _make_step_Z();
         _make_step_Y();
-        F();
-        //_write_to_file_Abs_U();
-        _write_to_file_Uz();
-        //_write_to_file();
-        ++n;
-        if (n >= N)
-            break;
+
+        for (int i = 2; i < _size_i - 2; ++i)
+        {
+            for (int j = 2; j < _size_j - 2; ++j)
+            {
+                for (int k = 2; k < _size_k - 2; ++k)
+                {
+                    index = i * _I + j * _J + k;
+                    w_next[index] += w_rank_curr[index] / 6.;
+                    w_rank_curr[index] = w_curr[index];
+                }
+            }
+        }
 
         _make_step_Y();
         _make_step_Z();
         _make_step_X();
-        F();
-        //_write_to_file_Abs_U();
-        _write_to_file_Uz();
-        //_write_to_file();
-        ++n;
-        if (n >= N)
-            break;
+
+        for (int i = 2; i < _size_i - 2; ++i)
+        {
+            for (int j = 2; j < _size_j - 2; ++j)
+            {
+                for (int k = 2; k < _size_k - 2; ++k)
+                {
+                    index = i * _I + j * _J + k;
+                    w_next[index] += w_rank_curr[index] / 6.;
+                    w_rank_curr[index] = w_curr[index];
+                }
+            }
+        }
 
         _make_step_Z();
         _make_step_Y();
         _make_step_X();
-        F();
+
+        for (int i = 2; i < _size_i - 2; ++i)
+        {
+            for (int j = 2; j < _size_j - 2; ++j)
+            {
+                for (int k = 2; k < _size_k - 2; ++k)
+                {
+                    index = i * _I + j * _J + k;
+                    w_curr[index] = w_next[index] + w_rank_curr[index] / 6.;
+                }
+            }
+        }
+
+        F(n);
         //_write_to_file_Abs_U();
         _write_to_file_Uz();
-        //_write_to_file();
-        ++n;
-        if (n >= N)
-            break;
     }
 }
