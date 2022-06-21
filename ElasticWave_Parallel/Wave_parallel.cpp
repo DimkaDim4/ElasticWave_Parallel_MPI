@@ -13,7 +13,6 @@ void Wave3d::F(const int& n)
                 //double _f = f(n * tau * 3., (i - starti_rw) * h, (j - startj_rw) * h, (PML_Size) * h) * tau * 3;
                 if (_f != 0.)
                 {
-                    //printf("rank = %d f: (%d, %d, %d) f = %f\n", rank, starts_f[0] + i - starti_rw, starts_f[1] + j - startj_rw, k - 2 - PML_Size, _f);
                     //w_curr[index].u_x += _f;
                     //w_curr[index].u_y += _f;
                     //w_curr[index].u_z += _f;
@@ -1577,6 +1576,122 @@ void Wave3d::_make_step_Z()
     // dW/dt + A * dW/dz = 0 
 
     long int index = 0;
+    Vars w_0, w_m, w_p1, w_p2;
+    // Поглащающие граничные условия по направлению z. Расчет с помощью мнимых точек на внешей границе PML области
+    // Для границы слева
+    // k = 2
+    // к = 0, 1 - дополнительные мнимые точки
+    for (long int i = 2; i < _size_i - 2; ++i)
+    {
+        for (long int j = 2; j < _size_j - 2; ++j)
+        {
+            // k = 2
+            index = i * _I + j * _J + 2;
+
+            // Для первой мнимой точки
+            w_p1 = w_rank_curr[index];
+            w_0 = w_rank_curr[index - 1];
+            w_m = w_rank_curr[index - 2];
+            w_p2 = w_rank_curr[index + 1];
+
+            w_0.u_x = w_p1.u_x;
+            w_0.u_y = w_p1.u_y;
+            w_0.u_z = w_p1.u_z;
+
+            w_0.sigma_zx = -w_p1.sigma_zx;
+            w_0.sigma_yz = -w_p1.sigma_yz;
+            w_0.sigma_zz = -w_p1.sigma_zz;
+
+            w_0.sigma_xx = 0.;
+            w_0.sigma_xy = 0.;
+            w_0.sigma_yy = 0.;
+
+            // Для второй мнимой точки
+            w_m.u_x = w_p2.u_x;
+            w_m.u_y = w_p2.u_y;
+            w_m.u_z = w_p2.u_z;
+
+            w_m.sigma_zx = -w_p2.sigma_zx;
+            w_m.sigma_yz = -w_p2.sigma_yz;
+            w_m.sigma_zz = -w_p2.sigma_zz;
+
+            w_m.sigma_xx = 0.;
+            w_m.sigma_xy = 0.;
+            w_m.sigma_yy = 0.;
+
+            w_rank_curr[index - 2] = w_m;
+            w_rank_curr[index - 1] = w_0;
+        }
+    }
+
+
+    // Для правой границы
+    // k = _size_k - 3
+    // k = _size_k - 2, _size_k - 1 - дополнительные мнимые точки
+    for (long int i = 2; i < _size_i - 2; ++i)
+    {
+        for (long int j = 2; j < _size_j - 2; ++j)
+        {
+            index = i * _I + j * _J + _size_k - 3;
+
+            // для первой мнимой точки
+            w_p1 = w_rank_curr[index];
+            w_0 = w_rank_curr[index + 1];
+            w_m = w_rank_curr[index + 2];
+            w_p2 = w_rank_curr[index - 1];
+
+            w_0.u_x = w_p1.u_x;
+            w_0.u_y = w_p1.u_y;
+            w_0.u_z = w_p1.u_z;
+
+            w_0.sigma_zx = -w_p1.sigma_zx;
+            w_0.sigma_yz = -w_p1.sigma_yz;
+            w_0.sigma_zz = -w_p1.sigma_zz;
+
+            w_0.sigma_xx = 0.;
+            w_0.sigma_xy = 0.;
+            w_0.sigma_yy = 0.;
+
+            // для второй мнимой точки
+            w_m.u_x = w_p2.u_x;
+            w_m.u_y = w_p2.u_y;
+            w_m.u_z = w_p2.u_z;
+
+            w_m.sigma_zx = -w_p2.sigma_zx;
+            w_m.sigma_yz = -w_p2.sigma_yz;
+            w_m.sigma_zz = -w_p2.sigma_zz;
+
+            w_m.sigma_xx = 0.;
+            w_m.sigma_xy = 0.;
+            w_m.sigma_yy = 0.;
+
+            w_rank_curr[index + 2] = w_m;
+            w_rank_curr[index + 1] = w_0;
+        }
+    }
+
+
+    // Граничные условия - отражение от границы на поверхности z = 0:
+    // sigma_zz = sigma_zy = sigma_zx = 0
+    // Для переменных u_x, u_y, u_z, sigma_xx, sigma_xy, sigma_yy граничные условия не заданы! => PML
+    // k = 2 + PML_Size
+    for (long int i = 2; i < _size_i - 2; ++i)
+    {
+        for (long int j = 2; j < _size_j - 2; ++j)
+        {
+            index = i * _I + j * _J + (2 + PML_Size);
+            w_rank_curr[index].sigma_zx = 0.;
+            w_rank_curr[index].sigma_yz = 0.;
+            w_rank_curr[index].sigma_zz = 0.;
+
+            index--;
+            w_rank_curr[index].sigma_zx = 0.;
+            w_rank_curr[index].sigma_yz = 0.;
+            w_rank_curr[index].sigma_zz = 0.;
+        }
+    }
+
+
     // Переход к характеристической системе
     for (int i = 2; i < _size_i - 2; ++i)
     {
@@ -1656,7 +1771,7 @@ void Wave3d::_make_step_Z()
     {
         for (int j = 2; j < _size_j - 2; ++j)
         {
-            for (int k = 2; k < _size_k - 2; ++k)
+            for (int k = 3; k < _size_k - 3; ++k)
             {
                 index = i * _I + j * _J + k;
                 if (v_p[index] != v_p[index - 1])
@@ -1825,116 +1940,6 @@ void Wave3d::_make_step_Z()
                     w_rank_curr[index].sigma_yz -= rho_a * vs_a * z[1];
                 }
             }
-        }
-    }
-
-    Vars w_0, w_m, w_p1, w_p2;
-    // Поглащающие граничные условия по направлению z. Расчет с помощью мнимых точек на внешей границе PML области
-    // Для границы слева
-    // k = 2
-    // к = 0, 1 - дополнительные мнимые точки
-    for (long int i = 2; i < _size_i - 2; ++i)
-    {
-        for (long int j = 2; j < _size_j - 2; ++j)
-        {
-            // k = 2
-            index = i * _I + j * _J + 2;
-
-            // Для первой мнимой точки
-            w_p1 = w_rank_curr[index];
-            w_0 = w_rank_curr[index - 1];
-            w_m = w_rank_curr[index - 2];
-            w_p2 = w_rank_curr[index + 1];
-
-            w_0.u_x = w_p1.u_x;
-            w_0.u_y = w_p1.u_y;
-            w_0.u_z = w_p1.u_z;
-
-            w_0.sigma_zx = -w_p1.sigma_zx;
-            w_0.sigma_yz = -w_p1.sigma_yz;
-            w_0.sigma_zz = -w_p1.sigma_zz;
-
-            w_0.sigma_xx = 0.;
-            w_0.sigma_xy = 0.;
-            w_0.sigma_yy = 0.;
-
-            // Для второй мнимой точки
-            w_m.u_x = w_p2.u_x;
-            w_m.u_y = w_p2.u_y;
-            w_m.u_z = w_p2.u_z;
-
-            w_m.sigma_zx = -w_p2.sigma_zx;
-            w_m.sigma_yz = -w_p2.sigma_yz;
-            w_m.sigma_zz = -w_p2.sigma_zz;
-
-            w_m.sigma_xx = 0.;
-            w_m.sigma_xy = 0.;
-            w_m.sigma_yy = 0.;
-
-            w_rank_curr[index - 2] = w_m;
-            w_rank_curr[index - 1] = w_0;
-        }
-    }
-
-
-    // Для правой границы
-    // k = _size_k - 3
-    // k = _size_k - 2, _size_k - 1 - дополнительные мнимые точки
-    for (long int i = 2; i < _size_i - 2; ++i)
-    {
-        for (long int j = 2; j < _size_j - 2; ++j)
-        {
-            index = i * _I + j * _J + _size_k - 3;
-
-            // для первой мнимой точки
-            w_p1 = w_rank_curr[index];
-            w_0 = w_rank_curr[index + 1];
-            w_m = w_rank_curr[index + 2];
-            w_p2 = w_rank_curr[index - 1];
-
-            w_0.u_x = w_p1.u_x;
-            w_0.u_y = w_p1.u_y;
-            w_0.u_z = w_p1.u_z;
-
-            w_0.sigma_zx = -w_p1.sigma_zx;
-            w_0.sigma_yz = -w_p1.sigma_yz;
-            w_0.sigma_zz = -w_p1.sigma_zz;
-
-            w_0.sigma_xx = 0.;
-            w_0.sigma_xy = 0.;
-            w_0.sigma_yy = 0.;
-
-            // для второй мнимой точки
-            w_m.u_x = w_p2.u_x;
-            w_m.u_y = w_p2.u_y;
-            w_m.u_z = w_p2.u_z;
-
-            w_m.sigma_zx = -w_p2.sigma_zx;
-            w_m.sigma_yz = -w_p2.sigma_yz;
-            w_m.sigma_zz = -w_p2.sigma_zz;
-
-            w_m.sigma_xx = 0.;
-            w_m.sigma_xy = 0.;
-            w_m.sigma_yy = 0.;
-
-            w_rank_curr[index + 2] = w_m;
-            w_rank_curr[index + 1] = w_0;
-        }
-    }
-
-
-    // Граничные условия - отражение от границы на поверхности z = 0:
-    // sigma_zz = sigma_zy = sigma_zx = 0
-    // Для переменных u_x, u_y, u_z, sigma_xx, sigma_xy, sigma_yy граничные условия не заданы! => PML
-    // k = 2 + PML_Size
-    for (long int i = 2; i < _size_i - 2; ++i)
-    {
-        for (long int j = 2; j < _size_j - 2; ++j)
-        {
-            index = i * _I + j * _J + (2 + PML_Size);
-            w_rank_curr[index].sigma_zx = 0.;
-            w_rank_curr[index].sigma_yz = 0.;
-            w_rank_curr[index].sigma_zz = 0.;
         }
     }
 }
@@ -2240,16 +2245,12 @@ void Wave3d::_read_param_from_file()
     MPI_File_set_view(datafile_vp, 0, MPI_DOUBLE, subarray_rw, "native", MPI_INFO_NULL);
     MPI_File_read_all(datafile_vp, buf_rw, count_rw, MPI_DOUBLE, &status);
 
-    //int count;
-    //MPI_Get_count(&status, MPI_DOUBLE, &count);
-    //printf("process (%d, %d) read %d\n", rank_coords[0], rank_coords[1], count);
-
     long int index = 0;
-    for (int i = starti_rw; i < endi_rw; ++i)
+    for (int i = starti_rw; i < endi_rw; i++)
     {
-        for (int j = startj_rw; j < endj_rw; ++j)
+        for (int j = startj_rw; j < endj_rw; j++)
         {
-            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; k++)
             {
                 v_p[i * _I + j * _J + k] = buf_rw[index];
                 index++;
@@ -2487,7 +2488,7 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
-
+    else
     /////////////////////////////////////////////////////////////
     // 
     // ++ ******
@@ -2658,7 +2659,7 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
-
+    else
     /////////////////////////////////////////////////////////////
     // 
     // +++++++++
@@ -2827,7 +2828,7 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
-
+    else
     /////////////////////////////////////////////////////////////
     // 
     // ****** ++
@@ -2996,7 +2997,7 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
-
+    else
     /////////////////////////////////////////////////////////////
     // 
     // ++ ******
@@ -3082,7 +3083,7 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
-
+    else
     /////////////////////////////////////////////////////////////
     // 
     // ****** ++
@@ -3168,7 +3169,7 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
-
+    else
     /////////////////////////////////////////////////////////////
     // 
     // ++++++++
@@ -3254,7 +3255,7 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
-
+    else
     /////////////////////////////////////////////////////////////
     // 
     // ******** 
@@ -3299,7 +3300,7 @@ void Wave3d::_read_param_from_file()
                 }
             }
 
-            for (int i = _size_i - PML_Size - 2; j < _size_i; ++i)
+            for (int i = _size_i - PML_Size - 2; i < _size_i; ++i)
             {
                 index_1 = i * _I + j * _J;
                 index_2 = (_size_i - 3 - PML_Size) * _I + j * _J + 2 + PML_Size;
@@ -3340,7 +3341,27 @@ void Wave3d::_read_param_from_file()
             }
         }
     }
+    else
+    for (long int i = 2; i < _size_i - 2; ++i)
+    {
+        for (long int j = 2; j < _size_j - 2; ++j)
+        {
+            for (long int k = 0; k < 2 + PML_Size; k++)
+            {
+                v_p[i * _I + j * _J + k] = v_p[i * _I + j * _J + 2 + PML_Size];
+                v_s[i * _I + j * _J + k] = v_s[i * _I + j * _J + 2 + PML_Size];
+                Rho[i * _I + j * _J + k] = Rho[i * _I + j * _J + 2 + PML_Size];
+            }
 
+            for (long int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; k++)
+            {
+                v_p[i * _I + j * _J + k] = v_p[i * _I + j * _J + _size_k - 3 - PML_Size];
+                v_s[i * _I + j * _J + k] = v_s[i * _I + j * _J + _size_k - 3 - PML_Size];
+                Rho[i * _I + j * _J + k] = Rho[i * _I + j * _J + _size_k - 3 - PML_Size];
+            }
+        }
+    }
+    
 
     MPI_Datatype left_subaray_send_param;
     MPI_Datatype left_subaray_recv_param;
@@ -3509,33 +3530,6 @@ void Wave3d::_read_param_from_file()
 
     MPI_Type_free(&lower_subaray_send_param);
     MPI_Type_free(&lower_subaray_recv_param);
-
-    /*for (int i = starti_rw; i < endi_rw; i++)
-    {
-        for (int j = startj_rw; j < endj_rw; j++)
-        {
-            for (int k = 2 + PML_Size; k < 2 + I + PML_Size; k++)
-            {
-                if (v_p[i * _I + j * _J + k] != 3.2)
-                    std::cout << v_p[i * _I + j * _J + k] << "\n";
-            }
-        }
-    }*/
-
-    /*for (int i = 0; i < _size_i; i++)
-    {
-        for (int j = 0; j < _size_j; j++)
-        {
-            for (int k = 0; k < _size_k; k++)
-            {
-                if (v_p[i * _I + j * _J + k] != 3.8)
-                {
-                    std::cout << "vp = " << v_p[i * _I + j * _J + k] << "\n";
-                    printf("index = ( %d, %d, %d )\n", i, j, k);
-                }
-            }
-        }
-    }*/
 }
 
 Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, double)> f)
@@ -3543,7 +3537,7 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     // Инициализация копмпонент для параллельной работы программы
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    // Декомпозиция области. Переход к декартовой топологии
+    // Декомпозиция области. Переход к двумерной декартовой топологии процессов
     ierror = MPI_Dims_create(size, 2, dims);
     if (ierror != MPI_SUCCESS)
         printf("MPI_Dims_create error!");
@@ -3576,8 +3570,6 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     //    +---+---+---+
     // 
     ///////////////////////////////////////////////////////
-
-    //printf("rank: (%d, %d) = %d:\nleft_rank = %d\nright_rank = %d\nlower_rank = %d\nupper_rank = %d\n", rank_coords[0], rank_coords[1], rank, left_rank, right_rank, lower_rank, upper_rank);
 
     // создание структуры Vars для MPI пересылок
     const int nitems = 9;
@@ -3692,6 +3684,8 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     starts_f[1] = starts[1];
     starts_f[2] = starts[2];
 
+    //printf("rank: (%d, %d)\n    starts i = %d\n    starts j = %d\n    c rw = %d\n    l i = %d\n    l j = %d\n", rank_coords[0], rank_coords[1], starts[0], starts[1], count_rw, lsizes[0], lsizes[1]);
+
     // Определяем подмассив - подобласть в трехмерном пространстве.
     // subarray_rw - определяет место положение данных в файле для считывания / записи данному процессу.
     MPI_Type_create_subarray(3, gsizes, lsizes, starts, MPI_ORDER_C, MPI_DOUBLE, &subarray_rw);
@@ -3783,8 +3777,6 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
         }
     }
 
-    //printf("rank: (%d, %d):\n", rank_coords[0], rank_coords[1]);
-    //std::cout << " max rank = " << max << std::endl;
     MPI_Gather(&max, 1, MPI_DOUBLE, _max, 1, MPI_DOUBLE, 0, communicator);
 
     if (rank == 0)
@@ -3794,18 +3786,11 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
             max = max < _max[i] ? _max[i] : max;
         }
     }
-
     MPI_Bcast(&max, 1, MPI_DOUBLE, 0, communicator);
     delete[] _max;
 
-    //printf("rank: (%d, %d):\n", rank_coords[0], rank_coords[1]);
-
     this->tau = (h / max * 0.95);
     this->N = int(T / (tau * 3));
-
-    //std::cout << " max rank = " << max << std::endl;
-    //std::cout << " tau rank = " << tau << std::endl;
-    //std::cout << " N rank = " << N << std::endl;
 
     long int size_data_one_iter = I * I * I * 8; // в байтах
     long int size_data = N * size_data_one_iter; // в байтах
@@ -3888,6 +3873,7 @@ void Wave3d::solve()
     }
 
     _write_to_file_Uz();
+    _write_to_file_Abs_U();
 
     long int index;
     for (int n = 0; n < N; n++)
@@ -4006,7 +3992,7 @@ void Wave3d::solve()
         }
 
         F(n);
-        //_write_to_file_Abs_U();
+        _write_to_file_Abs_U();
         _write_to_file_Uz();
     }
 }

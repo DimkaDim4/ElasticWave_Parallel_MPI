@@ -66,7 +66,7 @@ private:
 	double* v_s = nullptr;
 	double* Rho = nullptr;
 
-	// Переменные, используемые для параллельной работы
+	// Переменные, используемые для параллельной работы программы
 	int ierror;
 	int dims[2] = { 0, 0 };
 	int periods[2] = { false, false };
@@ -126,11 +126,13 @@ private:
 	MPI_Comm communicator;
 	MPI_Status status;
 
-	double tau;
-	double h;
-	double T;
-	int I;
-	int N;
+	// параметры для численного решения
+
+	double tau; // шаг по времени для решения системы уравнений переноса, расчет n+1 временного слоя с шагом 3*tau
+	double h; // шаг по регулярной сетки
+	double T; // время расчета
+	int I; // количество узлов в каждом направлении
+	int N; // количество итераций
 
 	long int _size_i;
 	long int _size_j;
@@ -139,10 +141,12 @@ private:
 	long int _I;
 	long int _J;
 
-	int PML_Size = 15;
+	int PML_Size = 15; // толщина PML-слоя
 	double sigma_max = 40;
 
+	// источник волновых возмущений - импульс Рикера
 	std::function<double(double, double, double, double)> f;
+	//int i_f, j_f, k_f;
 
 	Vars* w_rank_curr;
 	Vars* w_rank_next;
