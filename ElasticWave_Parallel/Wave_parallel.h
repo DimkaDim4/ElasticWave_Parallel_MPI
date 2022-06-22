@@ -1,4 +1,5 @@
 #include "mpi.h"
+#include <omp.h>
 #include <iostream>
 #include <functional>
 #include <fstream>

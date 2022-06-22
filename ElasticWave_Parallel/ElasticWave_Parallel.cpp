@@ -3,9 +3,9 @@
 double PI = 3.141592653589793;
 double v0 = 30.;
 double t0 = 1. / v0;
-double h = 1. / (100 - 1.);
+int I = 50;
+double h = 1. / (I - 1.);
 double A = 1000.;
-int I = 200;
 double T = 0.3;
 
 double f(double t, double x, double y, double z)

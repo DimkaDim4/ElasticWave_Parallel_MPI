@@ -2,6 +2,7 @@
 
 void Wave3d::F(const int& n)
 {
+#pragma omp for
     for (int i = starti_rw; i < endi_rw; ++i)
     {
         for (int j = startj_rw; j < endj_rw; ++j)
@@ -439,6 +440,9 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
             + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
             - 0.25 * sigma_vp * tau * demp * (delta0 + deltap) - tau * sigma_vp * sigma_vp * demp * (deltam - deltap) / 12.;
         break;
+    case -1:
+        g_next.u_x = sigma_vp * up.u_x + (1. - tau * demp - sigma_vp) * u.u_x;
+        break;
     }
 
     // 2-e уравнение переноса
@@ -472,6 +476,9 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
         g_next.u_y = u.u_y * coeff
             + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
             - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
+        break;
+    case -1:
+        g_next.u_y = sigma_vs * up.u_y + (1. - tau * demp - sigma_vs) * u.u_y;
         break;
     }
 
@@ -507,6 +514,9 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
         g_next.u_z = u.u_z * coeff
             + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
             - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
+        break;
+    case -1:
+        g_next.u_z = sigma_vp * up.u_z + (1. - tau * demp - sigma_vp) * u.u_z;
         break;
     }
 
@@ -554,6 +564,9 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
             + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
             - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
         break;
+    case -1:
+        g_next.sigma_xy = sigma_vs * um.sigma_xy + (1. - tau * demp - sigma_vs) * u.sigma_xy;
+        break;
     }
 
     // 8e уравнение переноса
@@ -589,6 +602,9 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
             + 0.5 * sigma_vs * (delta0 + deltap) + 0.5 * sigma_vs * sigma_vs * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
             - 0.25 * sigma_vs * tau * demp * (delta0 + deltap) - tau * sigma_vs * sigma_vs * demp * (deltam - deltap) / 12.;
         break;
+    case -1:
+        g_next.sigma_yz = sigma_vs * um.sigma_yz + (1. - tau * demp - sigma_vs) * u.sigma_yz;
+        break;
     }
 
     // 9e уравнение переноса
@@ -622,6 +638,9 @@ void Wave3d::_PML_solve_system_eq(const long int& index, const Vars& umm, const 
         g_next.sigma_zx = u.sigma_zx * coeff
             + 0.5 * sigma_vp * (delta0 + deltap) + 0.5 * sigma_vp * sigma_vp * (delta0 - deltap) + alpha * (deltam - 2. * delta0 + deltap)
             - 0.25 * sigma_vp * tau * demp * (delta0 + deltap) - tau * sigma_vp * sigma_vp * demp * (deltam - deltap) / 12.;
+        break;
+    case -1:
+        g_next.sigma_zx = sigma_vp * um.sigma_zx + (1. - tau * demp - sigma_vp) * u.sigma_zx;
         break;
     }
 
@@ -684,8 +703,10 @@ double Wave3d::_PML_get_alpha(const double& sigma, const double& _deltap, const 
         return 0.5 * sigma * (sigma - 1.); // схема Бима-Уорминга
     }
 
-    this->scheme_type = 2;
-    return sigma * (sigma * sigma - 1.) / 6.;
+    //printf("1");
+    this->scheme_type = -1;
+    return -1.;
+    //return sigma * (sigma * sigma - 1.) / 6.;
 }
 
 void Wave3d::_make_step_X()
@@ -696,6 +717,7 @@ void Wave3d::_make_step_X()
     long int index = 0;
     // Переход к характеристической системе
     // (получим решение в инвариантах Римана)
+#pragma omp for private(index)
     for (int i = 0; i < _size_i; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -744,6 +766,87 @@ void Wave3d::_make_step_X()
         g_rank_curr, 1, lower_subaray_recv, lower_rank, 201,
         communicator, MPI_STATUS_IGNORE);
 
+    //bool pml_2 = false;
+    //long int start_pml2;
+    //if (starts_f[0] + _size_i - 4 >= I)
+    //    pml_2 = true;
+
+    //bool pml_1 = false;
+    //long int end_pml1;
+    //if (starts_f[0] < 0)
+    //    pml_1 = true;
+
+    //bool basic = false;
+    //long int start_basic, end_basic;
+    //if ((starts_f[0] >= 0) && ((starts_f[0] < I) || (starts_f[0] + _size_i - 3 > I)) || (starts_f[0] < 0) && (starts_f[0] + _size_i - 3 > 0))
+    //    basic = true;
+
+    //if (basic)
+    //{
+    //    if ((starts_f[0] >= 0) && (starts_f[0] + _size_i - 5 <= I))
+    //    {
+    //        start_basic = starts_f[0];
+    //    }
+    //}
+
+    //if (pml_1)
+    //{
+    //    if (starts_f[0] + PML_Size + _size_i - 5 >= PML_Size)
+    //        end_pml1 = PML_Size;
+    //    else
+    //        end_pml1 = starts_f[0] + PML_Size + _size_i - 4;
+    //}
+
+    //if (pml_1)
+    //{
+    //    for (long int j = 2; j < _size_j - 2; ++j)
+    //    {
+    //        for (long int k = 2; k < _size_k - 2; ++k)
+    //        {
+    //            // Расчет внутри PML 
+    //            for (long int i = starts_f[0] + PML_Size; i < end_pml1; ++i)
+    //            {
+    //                index = (i + 2 - starts_f[0] - PML_Size) * _I + j * _J + k;
+    //                // Демпфирующая функция d(s)
+    //                double demp = static_cast<double>(PML_Size - (i - starts_f[0] - PML_Size)) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
+
+    //                // Решение 9-ти независымых уравнений переноса в PML области
+    //                this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I], demp);
+    //            }
+    //        }
+    //    }
+    //}
+
+    //if (pml_2)
+    //{
+    //    if (starts_f[0] + PML_Size < I + PML_Size)
+    //        start_pml2 = I + PML_Size;
+    //    else
+    //        start_pml2 = starts_f[0] + PML_Size;
+    //}
+
+    //if (pml_2)
+    //{
+    //    for (long int j = 2; j < _size_j - 2; ++j)
+    //    {
+    //        for (long int k = 2; k < _size_k - 2; ++k)
+    //        {
+    //            // Расчет внутри PML
+    //            for (long int i = start_pml2; i < starts_f[0] + PML_Size + _size_i - 4; ++i)
+    //            {
+    //                index = (i - start_pml2 + 2) * _I + j * _J + k;
+    //                // Демпфирующая функция d(s)
+    //                double demp = static_cast<double>(i - (I + PML_Size) + 1) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
+
+    //                // Решение 9-ти независымых уравнений переноса в PML области
+    //                //this->_PML_transfer_eq_x(i * _I + j * _J + k, demp);
+    //                //index = i * _I + j * _J + k;
+    //                this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I], demp);
+    //            }
+    //        }
+    //    }
+    //}
+
     // Решение по монотонным разностным схемам сеточно-характеристическим методом
     long int start_i = 2;
     long int end_i = _size_i - 2;
@@ -752,6 +855,10 @@ void Wave3d::_make_step_X()
     // Так же, размер подобласти по направлению x больше, чем размер PML - области (обычно PML - 10-15 узлов)
     if (rank_coords[0] == 0)
     {
+        start_i = 2 + PML_Size;
+        end_i = _size_i - 2;
+
+#pragma omp for private(index)
         for (long int j = 2; j < _size_j - 2; ++j)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
@@ -768,9 +875,6 @@ void Wave3d::_make_step_X()
                     //index = i * _I + j * _J + k;
                     this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I], demp);
                 }
-
-                start_i = 2 + PML_Size;
-                end_i = _size_i - 2;
             }
         }
     }
@@ -778,13 +882,14 @@ void Wave3d::_make_step_X()
     // Рассчетная область прилегает к границе, а так же содердит PML - область
     if (rank_coords[0] == dims[0] - 1)
     {
+        start_i = 2;
+        end_i = _size_i - PML_Size - 2;
+
+#pragma omp for private(index)
         for (long int j = 2; j < _size_j - 2; ++j)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
             {
-                start_i = 2;
-                end_i = _size_i - PML_Size - 2;
-
                 // Расчет внутри PML
                 for (long int i = _size_i - PML_Size - 2; i < _size_i - 2; ++i)
                 {
@@ -801,8 +906,15 @@ void Wave3d::_make_step_X()
         }
     }
 
+    if (dims[0] == 1)
+    {
+        start_i = 2 + PML_Size;
+        end_i = _size_i - PML_Size - 2;
+    }
+
     // PML область рассчитывается в процессах, чья подобласть примыкает к границе по оси x.
     // Остальные процессы производят рассчет внутри исходной области
+#pragma omp for private(index)
     for (long int j = 2; j < _size_j - 2; ++j)
     {
         for (long int k = 2; k < _size_k - 2; ++k)
@@ -820,6 +932,7 @@ void Wave3d::_make_step_X()
     
 
     // Обратная замена - переход от характеристической системы к исходной
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -835,6 +948,7 @@ void Wave3d::_make_step_X()
 
 
     // Контактные условия - контактный корректор полного слипания
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -1028,6 +1142,7 @@ void Wave3d::_make_step_X()
     // записываются данные граничные условия
     if (rank_coords[0] == 0)
     {
+#pragma omp for private(index, w_0, w_m, w_p1, w_p2)
         for (long int j = 2; j < _size_j - 2; ++j)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
@@ -1080,6 +1195,7 @@ void Wave3d::_make_step_X()
     // записываются данные граничные условия
     if (rank_coords[0] == dims[0] - 1)
     {
+#pragma omp for private(index, w_0, w_m, w_p1, w_p2)
         for (long int j = 2; j < _size_j - 2; ++j)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
@@ -1133,6 +1249,7 @@ void Wave3d::_make_step_Y()
     long int index = 0;
     // Переход к характеристической системе
     // (получим решение в инвариантах Римана)
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 0; j < _size_j; ++j)
@@ -1188,6 +1305,10 @@ void Wave3d::_make_step_Y()
     // Так же, размер подобласти по направлению y больше, чем размер PML - области (обычно PML - 10-15 узлов)
     if (rank_coords[1] == 0)
     {
+        start_j = 2 + PML_Size;
+        end_j = _size_j - 2;
+
+#pragma omp for private(index)
         for (long int i = 2; i < _size_i - 2; ++i)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
@@ -1204,9 +1325,6 @@ void Wave3d::_make_step_Y()
                     //index = i * _I + j * _J + k;
                     this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _J], g_rank_curr[index - _J], g_rank_curr[index], g_rank_curr[index + _J], g_rank_curr[index + 2 * _J], demp);
                 }
-
-                start_j = 2 + PML_Size;
-                end_j = _size_j - 2;
             }
         }
     }
@@ -1214,13 +1332,14 @@ void Wave3d::_make_step_Y()
     // Рассчетная область прилегает к границе, а так же содердит PML - область
     if (rank_coords[1] == dims[1] - 1)
     {
+        start_j = 2;
+        end_j = _size_j - PML_Size - 2;
+
+#pragma omp for private(index)
         for (long int i = 2; i < _size_i - 2; ++i)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
             {
-                start_j = 2;
-                end_j = _size_j - PML_Size - 2;
-
                 // Расчет внутри PML
                 for (long int j = _size_j - PML_Size - 2; j < _size_j - 2; ++j)
                 {
@@ -1237,8 +1356,15 @@ void Wave3d::_make_step_Y()
         }
     }
 
+    if (dims[1] == 1)
+    {
+        start_j = 2 + PML_Size;
+        end_j = _size_i - PML_Size - 2;
+    }
+
     // PML область рассчитывается в процессах, чья подобласть примыкает к границе по оси j.
     // Остальные процессы производят рассчет внутри исходной области
+#pragma omp for private(index)
     for (long int i = 2; i < _size_i - 2; ++i)
     {
         for (long int k = 2; k < _size_k - 2; ++k)
@@ -1256,6 +1382,7 @@ void Wave3d::_make_step_Y()
 
 
     // обратная замена - переход от характеристической системы к исходной
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -1271,6 +1398,7 @@ void Wave3d::_make_step_Y()
 
 
     // Контактные условия - контактный корректор полного слипания
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -1471,6 +1599,7 @@ void Wave3d::_make_step_Y()
     // записываются данные граничные условия
     if (rank_coords[1] == 0)
     {
+#pragma omp for private(index, w_0, w_m, w_p1, w_p2)
         for (long int i = 2; i < _size_i - 2; ++i)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
@@ -1525,6 +1654,7 @@ void Wave3d::_make_step_Y()
     // записываются данные граничные условия
     if (rank_coords[1] == dims[1] - 1)
     {
+#pragma omp for private(index, w_0, w_m, w_p1, w_p2)
         for (long int i = 2; i < _size_i - 2; ++i)
         {
             for (long int k = 2; k < _size_k - 2; ++k)
@@ -1581,6 +1711,7 @@ void Wave3d::_make_step_Z()
     // Для границы слева
     // k = 2
     // к = 0, 1 - дополнительные мнимые точки
+#pragma omp for private(index, w_0, w_m, w_p1, w_p2)
     for (long int i = 2; i < _size_i - 2; ++i)
     {
         for (long int j = 2; j < _size_j - 2; ++j)
@@ -1628,6 +1759,7 @@ void Wave3d::_make_step_Z()
     // Для правой границы
     // k = _size_k - 3
     // k = _size_k - 2, _size_k - 1 - дополнительные мнимые точки
+#pragma omp for private(index, w_0, w_m, w_p1, w_p2)
     for (long int i = 2; i < _size_i - 2; ++i)
     {
         for (long int j = 2; j < _size_j - 2; ++j)
@@ -1675,6 +1807,7 @@ void Wave3d::_make_step_Z()
     // sigma_zz = sigma_zy = sigma_zx = 0
     // Для переменных u_x, u_y, u_z, sigma_xx, sigma_xy, sigma_yy граничные условия не заданы! => PML
     // k = 2 + PML_Size
+#pragma omp for private(index)
     for (long int i = 2; i < _size_i - 2; ++i)
     {
         for (long int j = 2; j < _size_j - 2; ++j)
@@ -1693,6 +1826,7 @@ void Wave3d::_make_step_Z()
 
 
     // Переход к характеристической системе
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -1707,6 +1841,7 @@ void Wave3d::_make_step_Z()
 
 
     // Решение по монотонным разностным схемам сеточно-характеристическим методом
+#pragma omp for private(index)
     for (long int i = 2; i < _size_i - 2; ++i)
     {
         for (long int j = 2; j < _size_j - 2; ++j)
@@ -1752,6 +1887,7 @@ void Wave3d::_make_step_Z()
 
 
     // обратная замена - переход от характеристической системы к исходной
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -1767,6 +1903,7 @@ void Wave3d::_make_step_Z()
 
 
     // Контактные условия - контактный корректор полного слипания
+#pragma omp for private(index)
     for (int i = 2; i < _size_i - 2; ++i)
     {
         for (int j = 2; j < _size_j - 2; ++j)
@@ -2235,6 +2372,8 @@ void Wave3d::_write_to_file_Uz()
 
 void Wave3d::_read_param_from_file()
 {
+    // Чтение параметров среды из файлов
+#pragma region Recv_param
     // Чтение из файла параметра среды vp - скорость продольных волн
     MPI_File datafile_vp;
     std::string filename_vp = std::string("Vp.bin");
@@ -2309,1060 +2448,1425 @@ void Wave3d::_read_param_from_file()
     }
     MPI_File_close(&datafile_rho);
     delete[] file_rho;
+#pragma endregion
 
     // Параметры среды считаны из файла для исходной вычислительной области без PML.
-    // Экстраполируем эти данные на PML - область и граничные точки.
-
+    // Экстраполяция данных на PML - область и граничные точки.
+#pragma region Extrapolate_param
     long int index_1;
     long int index_2;
-    
+
     double _vp;
     double _vs;
     double rho;
 
-    /////////////////////////////////////////////////////////////
-    // 
-    // +++++++++
-    // ++ ******
-    // ++ ******
-    // ++ ******
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[0] == 0) && (rank_coords[1] == 0))
     {
-        for (int i = 0; i < 2 + PML_Size; ++i)
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// +++++++++
+        //// ++ ******
+        //// ++ ******
+        //// ++ ******
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[0] == 0) && (rank_coords[1] == 0))
+        //{
+        //    for (int i = 0; i < 2 + PML_Size; ++i)
+        //    {
+        //        for (int j = 0; j < 2 + PML_Size; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (2 + PML_Size) * _I + (2 + PML_Size) * _J + (2 + PML_Size);
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (2 + PML_Size) * _I + j * _J + (2 + PML_Size);
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+
+        //    for (int i = 2 + PML_Size; i < _size_i - 2; ++i)
+        //    {
+        //        for (int j = 0; j < 2 + PML_Size; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + (2 + PML_Size) * _J + (2 + PML_Size);
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 2 + I + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// ++ ******
+        //// ++ ******
+        //// ++ ******
+        //// +++++++++
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[0] == dims[0] - 1) && (rank_coords[1] == 0))
+        //{
+        //    for (int i = 2; i < _size_i - PML_Size - 2; ++i)
+        //    {
+        //        for (int j = 0; j < 2 + PML_Size; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + (2 + PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+
+        //    for (int i = _size_i - PML_Size - 2; i < _size_i; ++i)
+        //    {
+        //        for (int j = 0; j < 2 + PML_Size; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (_size_i - 3 - PML_Size) * _I + (2 + PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (_size_i - 3 - PML_Size) * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// +++++++++
+        //// ****** ++
+        //// ****** ++
+        //// ****** ++
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[0] == 0) && (rank_coords[1] == dims[1] - 1))
+        //{
+        //    for (int i = 0; i < 2 + PML_Size; ++i)
+        //    {
+        //        for (int j = 2; j < _size_j - PML_Size - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (2 + PML_Size) * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (2 + PML_Size) * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+
+        //    for (int i = 2 + PML_Size; i < _size_i - 2; ++i)
+        //    {
+        //        for (int j = 2; j < _size_j - PML_Size - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// ****** ++
+        //// ****** ++
+        //// ****** ++
+        //// +++++++++
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[0] == dims[0] - 1) && (rank_coords[1] == dims[1] - 1))
+        //{
+        //    for (int i = 2; i < _size_i - PML_Size - 2; ++i)
+        //    {
+        //        for (int j = 2; j < _size_j - PML_Size - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+
+        //    for (int i = _size_i - PML_Size - 2; i < _size_i; ++i)
+        //    {
+        //        for (int j = 2; j < _size_j - PML_Size - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (_size_i - 3 - PML_Size) * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (_size_i - 3 - PML_Size) * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// ++ ******
+        //// ++ ******
+        //// ++ ******
+        //// ++ ******
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[0] != 0) && (rank_coords[0] != dims[0] - 1) && (rank_coords[1] == 0))
+        //{
+        //    for (int i = 2; i < _size_i - 2; ++i)
+        //    {
+        //        for (int j = 0; j < 2 + PML_Size; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + (2 + PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// ****** ++
+        //// ****** ++ 
+        //// ****** ++
+        //// ****** ++
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[0] != 0) && (rank_coords[0] != dims[0] - 1) && (rank_coords[1] == dims[1] - 1))
+        //{
+        //    for (int i = 2; i < _size_i - 2; ++i)
+        //    {
+        //        for (int j = 2; j < _size_j - PML_Size - 2; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// ++++++++
+        //// ******** 
+        //// ********
+        //// ********
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[1] != 0) && (rank_coords[1] != dims[1] - 1) && (rank_coords[0] == 0))
+        //{
+        //    for (int j = 2; j < _size_j - 2; ++j)
+        //    {
+        //        for (int i = 0; i < 2 + PML_Size; ++i)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (2 + PML_Size) * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int i = 2 + PML_Size; i < _size_i - 2; ++i)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        ///////////////////////////////////////////////////////////////
+        //// 
+        //// ******** 
+        //// ********
+        //// ********
+        //// ++++++++
+        ////
+        ///////////////////////////////////////////////////////////////
+        //if ((rank_coords[1] != 0) && (rank_coords[1] != dims[1] - 1) && (rank_coords[0] == dims[0] - 1))
+        //{
+        //    for (int j = 2; j < _size_j - 2; ++j)
+        //    {
+        //        for (int i = 2; i < _size_i - PML_Size - 2; ++i)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            index_1 += I;
+        //            index_2 += I - 1;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+
+        //        for (int i = _size_i - PML_Size - 2; i < _size_i; ++i)
+        //        {
+        //            index_1 = i * _I + j * _J;
+        //            index_2 = (_size_i - 3 - PML_Size) * _I + j * _J + 2 + PML_Size;
+
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = 0; k < 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+
+        //            for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = v_p[index_2];
+        //                v_s[index_1] = v_s[index_2];
+        //                Rho[index_1] = Rho[index_2];
+        //                ++index_1;
+        //                ++index_2;
+        //            }
+
+        //            --index_2;
+        //            _vp = v_p[index_2];
+        //            _vs = v_s[index_2];
+        //            rho = Rho[index_2];
+
+        //            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+        //            {
+        //                v_p[index_1] = _vp;
+        //                v_s[index_1] = _vs;
+        //                Rho[index_1] = rho;
+        //                ++index_1;
+        //            }
+        //        }
+        //    }
+        //}
+        //else
+        //for (long int i = 2; i < _size_i - 2; ++i)
+        //{
+        //    for (long int j = 2; j < _size_j - 2; ++j)
+        //    {
+        //        for (long int k = 0; k < 2 + PML_Size; k++)
+        //        {
+        //            v_p[i * _I + j * _J + k] = v_p[i * _I + j * _J + 2 + PML_Size];
+        //            v_s[i * _I + j * _J + k] = v_s[i * _I + j * _J + 2 + PML_Size];
+        //            Rho[i * _I + j * _J + k] = Rho[i * _I + j * _J + 2 + PML_Size];
+        //        }
+
+        //        for (long int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; k++)
+        //        {
+        //            v_p[i * _I + j * _J + k] = v_p[i * _I + j * _J + _size_k - 3 - PML_Size];
+        //            v_s[i * _I + j * _J + k] = v_s[i * _I + j * _J + _size_k - 3 - PML_Size];
+        //            Rho[i * _I + j * _J + k] = Rho[i * _I + j * _J + _size_k - 3 - PML_Size];
+        //        }
+        //    }
+        //}
+    }
+
+    for (long int i = 0; i < starti_rw; ++i)
+    {
+        for (long int j = 0; j < startj_rw; ++j)
         {
-            for (int j = 0; j < 2 + PML_Size; ++j)
+            index_1 = i * _I + j * _J;
+            index_2 = starti_rw * _I + startj_rw * _J + 2 + PML_Size;
+
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (long int k = 0; k < 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = (2 + PML_Size) * _I + (2 + PML_Size) * _J + (2 + PML_Size);
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
 
-            for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = (2 + PML_Size) * _I + j * _J + (2 + PML_Size);
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
 
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
 
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
         }
 
-        for (int i = 2 + PML_Size; i < _size_i - 2; ++i)
+        for (long int j = startj_rw; j < endj_rw; ++j)
         {
-            for (int j = 0; j < 2 + PML_Size; ++j)
+            index_1 = i * _I + j * _J;
+            index_2 = starti_rw * _I + j * _J + 2 + PML_Size;
+
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (long int k = 0; k < 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + (2 + PML_Size) * _J + (2 + PML_Size);
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
 
-            for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
 
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
 
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
+            }
+        }
 
-                index_1 += I;
-                index_2 += I - 1;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+        for (long int j = endj_rw; j < _size_j; ++j)
+        {
+            index_1 = i * _I + j * _J;
+            index_2 = starti_rw * _I + (endj_rw - 1) * _J + 2 + PML_Size;
 
-                for (int k = 2 + I + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (long int k = 0; k < 2 + PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
+            }
+
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+            {
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
+
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
         }
     }
-    else
-    /////////////////////////////////////////////////////////////
-    // 
-    // ++ ******
-    // ++ ******
-    // ++ ******
-    // +++++++++
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[0] == dims[0] - 1) && (rank_coords[1] == 0))
+
+    for (long int i = starti_rw; i < endi_rw; ++i)
     {
-        for (int i = 2; i < _size_i - PML_Size - 2; ++i)
+        for (long int j = 0; j < startj_rw; ++j)
         {
-            for (int j = 0; j < 2 + PML_Size; ++j)
+            index_1 = i * _I + j * _J;
+            index_2 = i * _I + startj_rw * _J + 2 + PML_Size;
+
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (long int k = 0; k < 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + (2 + PML_Size) * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
 
-            for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
 
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
 
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                index_1 += I;
-                index_2 += I - 1;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
         }
 
-        for (int i = _size_i - PML_Size - 2; i < _size_i; ++i)
+        for (long int j = startj_rw; j < endj_rw; ++j)
         {
-            for (int j = 0; j < 2 + PML_Size; ++j)
+            index_1 = i * _I + j * _J;
+            index_2 = i * _I + j * _J + 2 + PML_Size;
+
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (long int k = 0; k < 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = (_size_i - 3 - PML_Size) * _I + (2 + PML_Size) * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
 
-            for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
+            index_1 += I;
+            index_2 += I - 1;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = (_size_i - 3 - PML_Size) * _I + j * _J + 2 + PML_Size;
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
+            }
+        }
 
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+        for (long int j = endj_rw; j < _size_j; ++j)
+        {
+            index_1 = i * _I + j * _J;
+            index_2 = i * _I + (endj_rw - 1) * _J + 2 + PML_Size;
 
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
 
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
+            for (long int k = 0; k < 2 + PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
+            }
 
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+            {
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
 
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
         }
     }
-    else
-    /////////////////////////////////////////////////////////////
-    // 
-    // +++++++++
-    // ****** ++
-    // ****** ++
-    // ****** ++
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[0] == 0) && (rank_coords[1] == dims[1] - 1))
+
+    for (long int i = endi_rw; i < _size_i; ++i)
     {
-        for (int i = 0; i < 2 + PML_Size; ++i)
+        for (long int j = 0; j < startj_rw; ++j)
         {
-            for (int j = 2; j < _size_j - PML_Size - 2; ++j)
+            index_1 = i * _I + j * _J;
+            index_2 = (endi_rw - 1) * _I + startj_rw * _J + 2 + PML_Size;
+
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (long int k = 0; k < 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = (2 + PML_Size) * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
 
-            for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = (2 + PML_Size) * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
 
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
 
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
         }
 
-        for (int i = 2 + PML_Size; i < _size_i - 2; ++i)
+        for (long int j = startj_rw; j < endj_rw; ++j)
         {
-            for (int j = 2; j < _size_j - PML_Size - 2; ++j)
+            index_1 = i * _I + j * _J;
+            index_2 = (endi_rw - 1) * _I + j * _J + 2 + PML_Size;
+
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (long int k = 0; k < 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                index_1 += I;
-                index_2 += I - 1;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
 
-            for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
             {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
 
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
 
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
+            }
+        }
 
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
+        for (long int j = endj_rw; j < _size_j; ++j)
+        {
+            index_1 = i * _I + j * _J;
+            index_2 = (endi_rw - 1) * _I + (endj_rw - 1) * _J + 2 + PML_Size;
 
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
 
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
+            for (long int k = 0; k < 2 + PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
+            }
+
+            for (long int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
+            {
+                v_p[index_1] = v_p[index_2];
+                v_s[index_1] = v_s[index_2];
+                Rho[index_1] = Rho[index_2];
+                ++index_1;
+                ++index_2;
+            }
+
+            --index_2;
+            _vp = v_p[index_2];
+            _vs = v_s[index_2];
+            rho = Rho[index_2];
+
+            for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
+            {
+                v_p[index_1] = _vp;
+                v_s[index_1] = _vs;
+                Rho[index_1] = rho;
+                ++index_1;
             }
         }
     }
-    else
-    /////////////////////////////////////////////////////////////
-    // 
-    // ****** ++
-    // ****** ++
-    // ****** ++
-    // +++++++++
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[0] == dims[0] - 1) && (rank_coords[1] == dims[1] - 1))
-    {
-        for (int i = 2; i < _size_i - PML_Size - 2; ++i)
-        {
-            for (int j = 2; j < _size_j - PML_Size - 2; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
+#pragma endregion
 
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                index_1 += I;
-                index_2 += I - 1;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-
-            for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-        }
-
-        for (int i = _size_i - PML_Size - 2; i < _size_i; ++i)
-        {
-            for (int j = 2; j < _size_j - PML_Size - 2; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = (_size_i - 3 - PML_Size) * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-
-            for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = (_size_i - 3 - PML_Size) * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-        }
-    }
-    else
-    /////////////////////////////////////////////////////////////
-    // 
-    // ++ ******
-    // ++ ******
-    // ++ ******
-    // ++ ******
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[0] != 0) && (rank_coords[0] != dims[0] - 1) && (rank_coords[1] == 0))
-    {
-        for (int i = 2; i < _size_i - 2; ++i)
-        {
-            for (int j = 0; j < 2 + PML_Size; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + (2 + PML_Size) * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-
-            for (int j = 2 + PML_Size; j < _size_j - 2; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                index_1 += I;
-                index_2 += I - 1;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-        }
-    }
-    else
-    /////////////////////////////////////////////////////////////
-    // 
-    // ****** ++
-    // ****** ++ 
-    // ****** ++
-    // ****** ++
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[0] != 0) && (rank_coords[0] != dims[0] - 1) && (rank_coords[1] == dims[1] - 1))
-    {
-        for (int i = 2; i < _size_i - 2; ++i)
-        {
-            for (int j = 2; j < _size_j - PML_Size - 2; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                index_1 += I;
-                index_2 += I - 1;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-
-            for (int j = _size_j - PML_Size - 2; j < _size_j; ++j)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + (_size_j - 3 - PML_Size) * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-        }
-    }
-    else
-    /////////////////////////////////////////////////////////////
-    // 
-    // ++++++++
-    // ******** 
-    // ********
-    // ********
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[1] != 0) && (rank_coords[1] != dims[1] - 1) && (rank_coords[0] == 0))
-    {
-        for (int j = 2; j < _size_j - 2; ++j)
-        {
-            for (int i = 0; i < 2 + PML_Size; ++i)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = (2 + PML_Size) * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-
-            for (int i = 2 + PML_Size; i < _size_i - 2; ++i)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                index_1 += I;
-                index_2 += I - 1;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-        }
-    }
-    else
-    /////////////////////////////////////////////////////////////
-    // 
-    // ******** 
-    // ********
-    // ********
-    // ++++++++
-    //
-    /////////////////////////////////////////////////////////////
-    if ((rank_coords[1] != 0) && (rank_coords[1] != dims[1] - 1) && (rank_coords[0] == dims[0] - 1))
-    {
-        for (int j = 2; j < _size_j - 2; ++j)
-        {
-            for (int i = 2; i < _size_i - PML_Size - 2; ++i)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = i * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                index_1 += I;
-                index_2 += I - 1;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-
-            for (int i = _size_i - PML_Size - 2; i < _size_i; ++i)
-            {
-                index_1 = i * _I + j * _J;
-                index_2 = (_size_i - 3 - PML_Size) * _I + j * _J + 2 + PML_Size;
-
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = 0; k < 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-
-                for (int k = 2 + PML_Size; k < I + 2 + PML_Size; ++k)
-                {
-                    v_p[index_1] = v_p[index_2];
-                    v_s[index_1] = v_s[index_2];
-                    Rho[index_1] = Rho[index_2];
-                    ++index_1;
-                    ++index_2;
-                }
-
-                --index_2;
-                _vp = v_p[index_2];
-                _vs = v_s[index_2];
-                rho = Rho[index_2];
-
-                for (int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; ++k)
-                {
-                    v_p[index_1] = _vp;
-                    v_s[index_1] = _vs;
-                    Rho[index_1] = rho;
-                    ++index_1;
-                }
-            }
-        }
-    }
-    else
-    for (long int i = 2; i < _size_i - 2; ++i)
-    {
-        for (long int j = 2; j < _size_j - 2; ++j)
-        {
-            for (long int k = 0; k < 2 + PML_Size; k++)
-            {
-                v_p[i * _I + j * _J + k] = v_p[i * _I + j * _J + 2 + PML_Size];
-                v_s[i * _I + j * _J + k] = v_s[i * _I + j * _J + 2 + PML_Size];
-                Rho[i * _I + j * _J + k] = Rho[i * _I + j * _J + 2 + PML_Size];
-            }
-
-            for (long int k = I + 2 + PML_Size; k < 4 + I + 2 * PML_Size; k++)
-            {
-                v_p[i * _I + j * _J + k] = v_p[i * _I + j * _J + _size_k - 3 - PML_Size];
-                v_s[i * _I + j * _J + k] = v_s[i * _I + j * _J + _size_k - 3 - PML_Size];
-                Rho[i * _I + j * _J + k] = Rho[i * _I + j * _J + _size_k - 3 - PML_Size];
-            }
-        }
-    }
-    
-
+ #pragma region MPI_Type_create_subarray_param
     MPI_Datatype left_subaray_send_param;
     MPI_Datatype left_subaray_recv_param;
     MPI_Datatype right_subaray_send_param;
@@ -3464,61 +3968,67 @@ void Wave3d::_read_param_from_file()
     //printf("lower_subaray_recv_param\n    gsizes:\n        %d\n        %d\n        %d\n", gsizes[0], gsizes[1], gsizes[2]);
     //printf("    lsizes:\n        %d\n        %d\n        %d\n", lsizes[0], lsizes[1], lsizes[2]);
     //printf("    starts:\n        %d\n        %d\n        %d\n", starts[0], starts[1], starts[2]);
+#pragma endregion
 
     // Объмен данных между потоками: пересылка параметров среды по оси x.
-        MPI_Sendrecv(
-            v_p, 1, lower_subaray_send_param, lower_rank, 100,
-            v_p, 1, upper_subaray_recv_param, upper_rank, 100,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            v_s, 1, lower_subaray_send_param, lower_rank, 101,
-            v_s, 1, upper_subaray_recv_param, upper_rank, 101,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            Rho, 1, lower_subaray_send_param, lower_rank, 102,
-            Rho, 1, upper_subaray_recv_param, upper_rank, 102,
-            communicator, MPI_STATUS_IGNORE);
+#pragma region MPI_Sendrecv_param_X
+    MPI_Sendrecv(
+        v_p, 1, lower_subaray_send_param, lower_rank, 100,
+        v_p, 1, upper_subaray_recv_param, upper_rank, 100,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        v_s, 1, lower_subaray_send_param, lower_rank, 101,
+        v_s, 1, upper_subaray_recv_param, upper_rank, 101,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        Rho, 1, lower_subaray_send_param, lower_rank, 102,
+        Rho, 1, upper_subaray_recv_param, upper_rank, 102,
+        communicator, MPI_STATUS_IGNORE);
 
-        MPI_Sendrecv(
-            v_p, 1, upper_subaray_send_param, upper_rank, 103,
-            v_p, 1, lower_subaray_recv_param, lower_rank, 103,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            v_s, 1, upper_subaray_send_param, upper_rank, 104,
-            v_s, 1, lower_subaray_recv_param, lower_rank, 104,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            Rho, 1, upper_subaray_send_param, upper_rank, 105,
-            Rho, 1, lower_subaray_recv_param, lower_rank, 105,
-            communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        v_p, 1, upper_subaray_send_param, upper_rank, 103,
+        v_p, 1, lower_subaray_recv_param, lower_rank, 103,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        v_s, 1, upper_subaray_send_param, upper_rank, 104,
+        v_s, 1, lower_subaray_recv_param, lower_rank, 104,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        Rho, 1, upper_subaray_send_param, upper_rank, 105,
+        Rho, 1, lower_subaray_recv_param, lower_rank, 105,
+        communicator, MPI_STATUS_IGNORE);
+#pragma endregion
 
     // Объмен данных между потоками: пересылка параметров среды по оси y.
-        MPI_Sendrecv(
-            v_p, 1, right_subaray_send_param, right_rank, 106,
-            v_p, 1, left_subaray_recv_param, left_rank, 106,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            v_s, 1, right_subaray_send_param, right_rank, 107,
-            v_s, 1, left_subaray_recv_param, left_rank, 107,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            Rho, 1, right_subaray_send_param, right_rank, 108,
-            Rho, 1, left_subaray_recv_param, left_rank, 108,
-            communicator, MPI_STATUS_IGNORE);
+#pragma region MPI_Sendrecv_param_Y
+    MPI_Sendrecv(
+        v_p, 1, right_subaray_send_param, right_rank, 106,
+        v_p, 1, left_subaray_recv_param, left_rank, 106,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        v_s, 1, right_subaray_send_param, right_rank, 107,
+        v_s, 1, left_subaray_recv_param, left_rank, 107,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        Rho, 1, right_subaray_send_param, right_rank, 108,
+        Rho, 1, left_subaray_recv_param, left_rank, 108,
+        communicator, MPI_STATUS_IGNORE);
 
-        MPI_Sendrecv(
-            v_p, 1, left_subaray_send_param, left_rank, 109,
-            v_p, 1, right_subaray_recv_param, right_rank, 109,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            v_s, 1, left_subaray_send_param, left_rank, 110,
-            v_s, 1, right_subaray_recv_param, right_rank, 110,
-            communicator, MPI_STATUS_IGNORE);
-        MPI_Sendrecv(
-            Rho, 1, left_subaray_send_param, left_rank, 111,
-            Rho, 1, right_subaray_recv_param, right_rank, 111,
-            communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        v_p, 1, left_subaray_send_param, left_rank, 109,
+        v_p, 1, right_subaray_recv_param, right_rank, 109,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        v_s, 1, left_subaray_send_param, left_rank, 110,
+        v_s, 1, right_subaray_recv_param, right_rank, 110,
+        communicator, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(
+        Rho, 1, left_subaray_send_param, left_rank, 111,
+        Rho, 1, right_subaray_recv_param, right_rank, 111,
+        communicator, MPI_STATUS_IGNORE);
+#pragma endregion
 
+#pragma region MPI_Type_free_subarray_param
     MPI_Type_free(&left_subaray_send_param);
     MPI_Type_free(&left_subaray_recv_param);
 
@@ -3530,11 +4040,13 @@ void Wave3d::_read_param_from_file()
 
     MPI_Type_free(&lower_subaray_send_param);
     MPI_Type_free(&lower_subaray_recv_param);
+#pragma endregion
 }
 
 Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, double)> f)
 {
     // Инициализация копмпонент для параллельной работы программы
+#pragma region MPI init
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     // Декомпозиция области. Переход к двумерной декартовой топологии процессов
@@ -3542,12 +4054,41 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     if (ierror != MPI_SUCCESS)
         printf("MPI_Dims_create error!");
 
+    // Декомпозиция области. Создание нового комуникатора
     ierror = MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &communicator);
     if (ierror != MPI_SUCCESS)
         printf("MPI_Cart_create error!");
 
+    // Определение координат в двумерной топологии
     ierror = MPI_Comm_rank(communicator, &rank);
     ierror = MPI_Cart_coords(communicator, rank, 2, rank_coords);
+
+    ///////////////////////////////////////////////////////
+    // Расположение процессов в плоскости XY
+    //    +---+---+---+
+    //    | 0 | 1 | 2 |                   upper        |         upper = 1           |         upper = -1
+    //    +---+---+---+                   +---+        |           +---+             |           +---+
+    //    | 3 | 4 | 5 |              left | i | right  |  left = 3 | 4 | right = 5   |  left = -1 | 0 | right = 1
+    //    +---+---+---+                   +---+        |           +---+             |           +---+
+    //    | 6 | 7 | 8 |                   lower        |         lower = 7           |         lower = 3
+    //    +---+---+---+
+    // 
+    //    
+    //    +----------------------------------+
+    //    | (rank_coords[0], rank_coords[1]) |
+    //    +----------------------------------+
+    // 
+    //    +------------------+------------------+       +----------------------------+
+    //    |      (0, 0)      |      (0, 1)      | * * * |      (0, dims[1] - 1)      |
+    //    +------------------+------------------+       +----------------------------+
+    //    |      (1, 0)      |      (1, 1)      | * * * |      (1, dims[1] - 1)      |
+    //    +------------------+------------------+       +----------------------------+
+    //                     * * *                    *                * * *
+    //    +------------------+------------------+       +----------------------------+
+    //    | (dims[0] - 1, 0) | (dims[0] - 1, 1) | * * * | (dims[0] - 1, dims[1] - 1) |
+    //    +------------------+------------------+       +----------------------------+
+    // 
+    ///////////////////////////////////////////////////////
 
     // Определение процессов "слева" и  "справа"
     ierror = MPI_Cart_shift(communicator, 1, 1, &left_rank, &right_rank);
@@ -3558,18 +4099,7 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     ierror = MPI_Cart_shift(communicator, 0, 1, &upper_rank, &lower_rank);
     if (ierror != MPI_SUCCESS)
         printf("MPI_Cart_shift error!");
-
-    ///////////////////////////////////////////////////////
-    // Расположение процессов в плоскости XY
-    //    +---+---+---+
-    //    | 0 | 1 | 2 |                   upper
-    //    +---+---+---+                   +---+
-    //    | 3 | 4 | 5 |              left | i | right
-    //    +---+---+---+                   +---+
-    //    | 6 | 7 | 8 |                   lower
-    //    +---+---+---+
-    // 
-    ///////////////////////////////////////////////////////
+#pragma endregion
 
     // создание структуры Vars для MPI пересылок
     const int nitems = 9;
@@ -3595,89 +4125,116 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     this->T = T;
     this->I = I;
 
-    // определение размеров подобластей для каждого процесса
-    // по напрявлению x
+    // Определение размеров подобластей для каждого процесса.
+    // По направлению x
     int h1 = (I + 2 * PML_Size) / dims[0];
     int m1 = (I + 2 * PML_Size) % dims[0];
 
-    // по напрявлению y
+    // По направлению y
     int h2 = (I + 2 * PML_Size) / dims[1];
     int m2 = (I + 2 * PML_Size) % dims[1];
 
+    // Учет нецелочисленного деления
     if (rank_coords[0] < m1)
         h1++;
     if (rank_coords[1] < m2)
         h2++;
 
+    // Размер расчетной подобласти.
+    // По направлениям x и y подобласть должна хранить
+    // значения сеточных функций и параметры среды соседних подобластей для расчета по разностным схемам.
     _size_i = h1 + 4;
     _size_j = h2 + 4;
     _size_k = I + 2 * PML_Size + 4;
 
-    if (rank_coords[0] == 0)
+    // Случай dims[0] == 1 означает, что разбиение на подобласти по направлению x не производится
+    if (dims[0] != 1)
+    {
+        if (rank_coords[0] == 0)
+        {
+            starti_rw = 2 + PML_Size;
+            endi_rw = _size_i - 2;
+        }
+        else if (rank_coords[0] == dims[0] - 1)
+        {
+            starti_rw = 2;
+            endi_rw = _size_i - PML_Size - 2;
+        }
+        else
+        {
+            starti_rw = 2;
+            endi_rw = _size_i - 2;
+        }
+    }
+    else
     {
         starti_rw = 2 + PML_Size;
-        endi_rw = _size_i - 2;
-    }
-    else if (rank_coords[0] == dims[0] - 1)
-    {
-        starti_rw = 2;
         endi_rw = _size_i - PML_Size - 2;
     }
-    else
-    {
-        starti_rw = 2;
-        endi_rw = _size_i - 2;
-    }
 
-    if (rank_coords[1] == 0)
+    // Случай dims[1] == 1 означает, что разбиение на подобласти по направлению y не производится
+    if (dims[1] != 1)
+    {
+        if (rank_coords[1] == 0)
+        {
+            startj_rw = 2 + PML_Size;
+            endj_rw = _size_j - 2;
+        }
+        else if (rank_coords[1] == dims[1] - 1)
+        {
+            startj_rw = 2;
+            endj_rw = _size_j - PML_Size - 2;
+        }
+        else
+        {
+            startj_rw = 2;
+            endj_rw = _size_j - 2;
+        }
+    }
+    else
     {
         startj_rw = 2 + PML_Size;
-        endj_rw = _size_j - 2;
-    }
-    else if (rank_coords[1] == dims[1] - 1)
-    {
-        startj_rw = 2;
         endj_rw = _size_j - PML_Size - 2;
     }
-    else
-    {
-        startj_rw = 2;
-        endj_rw = _size_j - 2;
-    }
 
-    // Размеры исходной вычислительной области и ее размеры в подобласти процесса
+    // Размеры исходной вычислительной области и ее размеры в подобласти процесса.
+    // В случае dims[0] == 1, endi_rw - starti_rw = I
+    // В случае dims[1] == 1, endj_rw - startj_rw = I
     int gsizes[3] = { I , I , I};
     int lsizes[3] = { (endi_rw - starti_rw), (endj_rw - startj_rw), I};
     count_rw = lsizes[0] * lsizes[1] * lsizes[2];
     buf_rw = new double[count_rw];
 
-    // Смещение по трем направлениям
+    // Смещение по трем направлениям: x, y, z
     int starts[3];
+
     // Определение смещения для параллельного чтения / записи
     starts[0] = 0;
-    if (rank_coords[0] != 0)
+    if ((rank_coords[0] != 0) && (dims[0] != 1))
     {
         if (rank_coords[0] < m1)
         {
-            starts[0] = ((rank_coords[0] - 1) * h1 + (h1 - PML_Size));
+            starts[0] = rank_coords[0] * h1 - PML_Size;
         }
         else
         {
-            starts[0] = ((m1 - 1) * (h1 + 1) + (h1 + 1 - PML_Size) + (rank_coords[0] - m1) * h1);
+            starts[0] = m1 * (h1 + 1) + (rank_coords[0] - m1) * h1 - PML_Size;
         }
     }
+    
     starts[1] = 0;
-    if (rank_coords[1] != 0)
+    if ((rank_coords[1] != 0) && (dims[1] != 1))
     {
         if (rank_coords[1] < m2)
         {
-            starts[1] = ((rank_coords[1] - 1) * h2 + (h2 - PML_Size));
+            starts[1] = rank_coords[1] * h2 - PML_Size;
         }
         else
         {
-            starts[1] = ((m2 - 1) * (h2 + 1) + (h2 + 1 - PML_Size) + (rank_coords[1] - m2) * h2);
+            starts[1] = m2 * (h2 + 1) + (rank_coords[1] - m2) * h2 - PML_Size;
         }
     }
+
     starts[2] = 0;
 
     starts_f[0] = starts[0];
@@ -3761,6 +4318,7 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     _read_param_from_file();
 
     // определение максимального значение скорости продольных волн для задания шага по времени
+#pragma region Find max vp
     double max = 0.;
     double* _max = new double[dims[0] * dims[1]];
 
@@ -3788,10 +4346,13 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
     }
     MPI_Bcast(&max, 1, MPI_DOUBLE, 0, communicator);
     delete[] _max;
+#pragma endregion
 
     this->tau = (h / max * 0.95);
     this->N = int(T / (tau * 3));
 
+    // Определение количества файлов и количества итераций в файле.
+    // Каждый файл содержит в себе один из расчетных параметров
     long int size_data_one_iter = I * I * I * 8; // в байтах
     long int size_data = N * size_data_one_iter; // в байтах
     this->num_iters_in_file = (int)(this->max_size_file / size_data_one_iter);
@@ -3799,10 +4360,8 @@ Wave3d::Wave3d(int I, double T, std::function<double(double, double, double, dou
 
     w_rank_curr = new Vars[_size_i * _size_j * _size_k];
     w_rank_next = new Vars[_size_i * _size_j * _size_k];
-
     g_rank_next = new Vars[_size_i * _size_j * _size_k];
     g_rank_curr = new Vars[_size_i * _size_j * _size_k];
-
     w_next = new Vars[_size_i * _size_j * _size_k];
     w_curr = new Vars[_size_i * _size_j * _size_k];
 
@@ -3876,8 +4435,10 @@ void Wave3d::solve()
     _write_to_file_Abs_U();
 
     long int index;
+#pragma omp parallel default(shared) num_threads(4)
     for (int n = 0; n < N; n++)
     {
+#pragma omp for private(index)
         for (int i = 2; i < _size_i - 2; ++i)
         {
             for (int j = 2; j < _size_j - 2; ++j)
@@ -3894,6 +4455,7 @@ void Wave3d::solve()
         _make_step_Y();
         _make_step_Z();
 
+#pragma omp for private(index)
         for (int i = 2; i < _size_i - 2; ++i)
         {
             for (int j = 2; j < _size_j - 2; ++j)
@@ -3911,6 +4473,7 @@ void Wave3d::solve()
         _make_step_X();
         _make_step_Z();
 
+#pragma omp for private(index)
         for (int i = 2; i < _size_i - 2; ++i)
         {
             for (int j = 2; j < _size_j - 2; ++j)
@@ -3928,6 +4491,7 @@ void Wave3d::solve()
         _make_step_X();
         _make_step_Y();
 
+#pragma omp for private(index)
         for (int i = 2; i < _size_i - 2; ++i)
         {
             for (int j = 2; j < _size_j - 2; ++j)
@@ -3945,6 +4509,7 @@ void Wave3d::solve()
         _make_step_Z();
         _make_step_Y();
 
+#pragma omp for private(index)
         for (int i = 2; i < _size_i - 2; ++i)
         {
             for (int j = 2; j < _size_j - 2; ++j)
@@ -3962,6 +4527,7 @@ void Wave3d::solve()
         _make_step_Z();
         _make_step_X();
 
+#pragma omp for private(index)
         for (int i = 2; i < _size_i - 2; ++i)
         {
             for (int j = 2; j < _size_j - 2; ++j)
@@ -3979,6 +4545,7 @@ void Wave3d::solve()
         _make_step_Y();
         _make_step_X();
 
+#pragma omp for private(index)
         for (int i = 2; i < _size_i - 2; ++i)
         {
             for (int j = 2; j < _size_j - 2; ++j)
@@ -3994,5 +4561,6 @@ void Wave3d::solve()
         F(n);
         _write_to_file_Abs_U();
         _write_to_file_Uz();
+        //std::cout << "iter " << n << "complete\n";
     }
 }
