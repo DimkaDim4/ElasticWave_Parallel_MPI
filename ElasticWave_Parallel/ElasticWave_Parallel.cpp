@@ -3,10 +3,10 @@
 double PI = 3.141592653589793;
 double v0 = 30.;
 double t0 = 1. / v0;
-int I = 50;
+int I = 100;
 double h = 1. / (I - 1.);
 double A = 1000.;
-double T = 0.3;
+double T = 0.1;
 
 double f(double t, double x, double y, double z)
 {
@@ -17,8 +17,10 @@ double f(double t, double x, double y, double z)
 
 int main(int argc, char *argv[])
 {
+    omp_set_num_threads(1);
+
     int root = 0;
-    int MyID, NumProc, ierror;
+    int MyID, NumProc, ierror, nthreads;
     MPI_Status status;
 
     ierror = MPI_Init(&argc, &argv);
@@ -80,11 +82,37 @@ int main(int argc, char *argv[])
         datafileRho.close();
     }
     
+    if (MyID == 0)
+    {
+#pragma omp parallel
+        {
+            nthreads = omp_get_num_threads();
+        }
+        for (int i = 1; i < NumProc; i++)
+        {
+            MPI_Send(&nthreads, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+    }
+    else
+    {
+        MPI_Recv(&nthreads, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+        omp_set_num_threads(nthreads);
+    }
+
+#pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        printf("MPI rank %d from %d. Thread %d from %d.\n", MyID, NumProc, tid, nthreads);
+    }
+
     double tstart = MPI_Wtime();
     Wave3d wave(I, T, f);
     MPI_Barrier(MPI_COMM_WORLD);
 
-    wave.solve();
+#pragma omp parallel default(shared)
+    {
+        wave.solve();
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (MyID == root)

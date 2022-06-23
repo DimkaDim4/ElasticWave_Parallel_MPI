@@ -2,7 +2,8 @@
 
 void Wave3d::F(const int& n)
 {
-#pragma omp for
+    long int index;
+#pragma omp for private(index)
     for (int i = starti_rw; i < endi_rw; ++i)
     {
         for (int j = startj_rw; j < endj_rw; ++j)
@@ -755,97 +756,20 @@ void Wave3d::_make_step_X()
     // в этом случае вызов функции MPI_Sendrecv завершится без ошибок, операция отправки не осуществится,
     // будет совершенно только считывание.
     // Аналогично, если "сосед" сверху отсутствует, выполнится только отправка данных нижнему процессу.
-    MPI_Sendrecv(
-        g_rank_curr, 1, lower_subaray_send, lower_rank, 200,
-        g_rank_curr, 1, upper_subaray_recv, upper_rank, 200,
-        communicator, MPI_STATUS_IGNORE);
 
-    // Аналогично предыдущему вызову функции MPI_Sendrecv
-    MPI_Sendrecv(
-        g_rank_curr, 1, upper_subaray_send, upper_rank, 201,
-        g_rank_curr, 1, lower_subaray_recv, lower_rank, 201,
-        communicator, MPI_STATUS_IGNORE);
+#pragma omp master
+    {
+        MPI_Sendrecv(
+            g_rank_curr, 1, lower_subaray_send, lower_rank, 200,
+            g_rank_curr, 1, upper_subaray_recv, upper_rank, 200,
+            communicator, MPI_STATUS_IGNORE);
 
-    //bool pml_2 = false;
-    //long int start_pml2;
-    //if (starts_f[0] + _size_i - 4 >= I)
-    //    pml_2 = true;
-
-    //bool pml_1 = false;
-    //long int end_pml1;
-    //if (starts_f[0] < 0)
-    //    pml_1 = true;
-
-    //bool basic = false;
-    //long int start_basic, end_basic;
-    //if ((starts_f[0] >= 0) && ((starts_f[0] < I) || (starts_f[0] + _size_i - 3 > I)) || (starts_f[0] < 0) && (starts_f[0] + _size_i - 3 > 0))
-    //    basic = true;
-
-    //if (basic)
-    //{
-    //    if ((starts_f[0] >= 0) && (starts_f[0] + _size_i - 5 <= I))
-    //    {
-    //        start_basic = starts_f[0];
-    //    }
-    //}
-
-    //if (pml_1)
-    //{
-    //    if (starts_f[0] + PML_Size + _size_i - 5 >= PML_Size)
-    //        end_pml1 = PML_Size;
-    //    else
-    //        end_pml1 = starts_f[0] + PML_Size + _size_i - 4;
-    //}
-
-    //if (pml_1)
-    //{
-    //    for (long int j = 2; j < _size_j - 2; ++j)
-    //    {
-    //        for (long int k = 2; k < _size_k - 2; ++k)
-    //        {
-    //            // Расчет внутри PML 
-    //            for (long int i = starts_f[0] + PML_Size; i < end_pml1; ++i)
-    //            {
-    //                index = (i + 2 - starts_f[0] - PML_Size) * _I + j * _J + k;
-    //                // Демпфирующая функция d(s)
-    //                double demp = static_cast<double>(PML_Size - (i - starts_f[0] - PML_Size)) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
-
-    //                // Решение 9-ти независымых уравнений переноса в PML области
-    //                this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I], demp);
-    //            }
-    //        }
-    //    }
-    //}
-
-    //if (pml_2)
-    //{
-    //    if (starts_f[0] + PML_Size < I + PML_Size)
-    //        start_pml2 = I + PML_Size;
-    //    else
-    //        start_pml2 = starts_f[0] + PML_Size;
-    //}
-
-    //if (pml_2)
-    //{
-    //    for (long int j = 2; j < _size_j - 2; ++j)
-    //    {
-    //        for (long int k = 2; k < _size_k - 2; ++k)
-    //        {
-    //            // Расчет внутри PML
-    //            for (long int i = start_pml2; i < starts_f[0] + PML_Size + _size_i - 4; ++i)
-    //            {
-    //                index = (i - start_pml2 + 2) * _I + j * _J + k;
-    //                // Демпфирующая функция d(s)
-    //                double demp = static_cast<double>(i - (I + PML_Size) + 1) / static_cast<double>(PML_Size) * sigma_max * v_p[index];
-
-    //                // Решение 9-ти независымых уравнений переноса в PML области
-    //                //this->_PML_transfer_eq_x(i * _I + j * _J + k, demp);
-    //                //index = i * _I + j * _J + k;
-    //                this->_PML_solve_system_eq(index, g_rank_curr[index - 2 * _I], g_rank_curr[index - _I], g_rank_curr[index], g_rank_curr[index + _I], g_rank_curr[index + 2 * _I], demp);
-    //            }
-    //        }
-    //    }
-    //}
+        // Аналогично предыдущему вызову функции MPI_Sendrecv
+        MPI_Sendrecv(
+            g_rank_curr, 1, upper_subaray_send, upper_rank, 201,
+            g_rank_curr, 1, lower_subaray_recv, lower_rank, 201,
+            communicator, MPI_STATUS_IGNORE);
+    }
 
     // Решение по монотонным разностным схемам сеточно-характеристическим методом
     long int start_i = 2;
@@ -1187,7 +1111,6 @@ void Wave3d::_make_step_X()
         }
     }
 
-
     // Поглащающие граничные условия по направлению x. Расчет с помощью мнимых точек на внешей границе PML области.
     // Для границы (i = _size_i - 3)
     // Для данной подобласти (rank_coords[0] == dims[0] - 1), "соседа" справа нет,
@@ -1286,16 +1209,20 @@ void Wave3d::_make_step_Y()
     // в этом случае вызов функции MPI_Sendrecv завершится без ошибок, операция отправки не осуществится,
     // будет совершенно только считывание.
     // Аналогично, если "сосед" слева отсутствует, выполнится только отправка данных соседнему процессу.
-    MPI_Sendrecv(
-        g_rank_curr, 1, right_subaray_send, right_rank, 300,
-        g_rank_curr, 1, left_subaray_recv, left_rank, 300,
-        communicator, MPI_STATUS_IGNORE);
 
-    // Аналогично предыдущему вызову функции MPI_Sendrecv
-    MPI_Sendrecv(
-        g_rank_curr, 1, left_subaray_send, left_rank, 301,
-        g_rank_curr, 1, right_subaray_recv, right_rank, 301,
-        communicator, MPI_STATUS_IGNORE);
+#pragma omp master
+    {
+        MPI_Sendrecv(
+            g_rank_curr, 1, right_subaray_send, right_rank, 300,
+            g_rank_curr, 1, left_subaray_recv, left_rank, 300,
+            communicator, MPI_STATUS_IGNORE);
+
+        // Аналогично предыдущему вызову функции MPI_Sendrecv
+        MPI_Sendrecv(
+            g_rank_curr, 1, left_subaray_send, left_rank, 301,
+            g_rank_curr, 1, right_subaray_recv, right_rank, 301,
+            communicator, MPI_STATUS_IGNORE);
+    }
 
     // Решение по монотонным разностным схемам сеточно-характеристическим методом
     long int start_j = 2;
@@ -2099,7 +2026,7 @@ void Wave3d::_write_to_file_Sigma()
     {
         std::string filename_sigma = std::string("Sigma") + std::to_string(this->num_current_file_sigma) + std::string(".bin");
         char* file = new char[filename_sigma.length() + 1];
-        strcpy_s(file, filename_sigma.length() + 1, filename_sigma.c_str());
+        strcpy(file, filename_sigma.c_str());
 
         if (rank == 0)
         {
@@ -2149,7 +2076,7 @@ void Wave3d::_write_to_file_Sigma_Okt()
     {
         std::string filename_sigma_okt = std::string("Sigma_okt") + std::to_string(this->num_current_file_sigma_okt) + std::string(".bin");
         char* file = new char[filename_sigma_okt.length() + 1];
-        strcpy_s(file, filename_sigma_okt.length() + 1, filename_sigma_okt.c_str());
+        strcpy(file, filename_sigma_okt.c_str());
 
         if (rank == 0)
         {
@@ -2201,7 +2128,7 @@ void Wave3d::_write_to_file_Abs_U()
     {
         std::string filename_abs_u = std::string("Abs_U") + std::to_string(this->num_current_file_abs_u) + std::string(".bin");
         char* file = new char[filename_abs_u.length() + 1];
-        strcpy_s(file, filename_abs_u.length() + 1, filename_abs_u.c_str());
+        strcpy(file, filename_abs_u.c_str());
 
         if (rank == 0)
         {
@@ -2250,7 +2177,7 @@ void Wave3d::_write_to_file_Ux()
     {
         std::string filename_u_x = std::string("Ux") + std::to_string(this->num_current_file_u_x) + std::string(".bin");
         char* file = new char[filename_u_x.length() + 1];
-        strcpy_s(file, filename_u_x.length() + 1, filename_u_x.c_str());
+        strcpy(file, filename_u_x.c_str());
 
         if (rank == 0)
         {
@@ -2296,7 +2223,7 @@ void Wave3d::_write_to_file_Uy()
     {
         std::string filename_u_y = std::string("Uy") + std::to_string(this->num_current_file_u_y) + std::string(".bin");
         char* file = new char[filename_u_y.length() + 1];
-        strcpy_s(file, filename_u_y.length() + 1, filename_u_y.c_str());
+        strcpy(file, filename_u_y.c_str());
 
         if (rank == 0)
         {
@@ -2342,7 +2269,7 @@ void Wave3d::_write_to_file_Uz()
     {
         std::string filename_u_z = std::string("Uz") + std::to_string(this->num_current_file_u_z) + std::string(".bin");
         char* file = new char[filename_u_z.length() + 1];
-        strcpy_s(file, filename_u_z.length() + 1, filename_u_z.c_str());
+        strcpy(file, filename_u_z.c_str());
 
         if (rank == 0)
         {
@@ -2378,7 +2305,7 @@ void Wave3d::_read_param_from_file()
     MPI_File datafile_vp;
     std::string filename_vp = std::string("Vp.bin");
     char* file_vp = new char[filename_vp.length() + 1];
-    strcpy_s(file_vp, filename_vp.length() + 1, filename_vp.c_str());
+    strcpy(file_vp, filename_vp.c_str());
 
     MPI_File_open(communicator, file_vp, MPI_MODE_RDONLY, MPI_INFO_NULL, &datafile_vp);
     MPI_File_set_view(datafile_vp, 0, MPI_DOUBLE, subarray_rw, "native", MPI_INFO_NULL);
@@ -2403,7 +2330,7 @@ void Wave3d::_read_param_from_file()
     MPI_File datafile_vs;
     std::string filename_vs = std::string("Vs.bin");
     char* file_vs = new char[filename_vs.length() + 1];
-    strcpy_s(file_vs, filename_vs.length() + 1, filename_vs.c_str());
+    strcpy(file_vs, filename_vs.c_str());
 
     MPI_File_open(communicator, file_vs, MPI_MODE_RDONLY, MPI_INFO_NULL, &datafile_vs);
     MPI_File_set_view(datafile_vs, 0, MPI_DOUBLE, subarray_rw, "native", MPI_INFO_NULL);
@@ -2428,7 +2355,7 @@ void Wave3d::_read_param_from_file()
     MPI_File datafile_rho;
     std::string filename_rho = std::string("Rho.bin");
     char* file_rho = new char[filename_rho.length() + 1];
-    strcpy_s(file_rho, filename_rho.length() + 1, filename_rho.c_str());
+    strcpy(file_rho, filename_rho.c_str());
 
     MPI_File_open(communicator, file_rho, MPI_MODE_RDONLY, MPI_INFO_NULL, &datafile_rho);
     MPI_File_set_view(datafile_rho, 0, MPI_DOUBLE, subarray_rw, "native", MPI_INFO_NULL);
@@ -4419,23 +4346,28 @@ void Wave3d::solve()
 {
     if (rank == 0)
     {   
-        std::ofstream param("param.txt");
-        param << "N = " << N << "\n";
-        param << "I = " << I << "\n";
-        param << "J = " << I << "\n";
-        param << "K = " << I << "\n";
-        param << "T = " << T << "\n";
-        param << "NumFile = " << this->num_file << "\n";
-        param << "NumIter = " << this->num_iters_in_file << "\n";
-        param << "NumiterLast = " << N - (num_file - 1) * num_iters_in_file;
-        param.close();
+#pragma omp master
+        {
+            std::ofstream param("param.txt");
+            param << "N = " << N << "\n";
+            param << "I = " << I << "\n";
+            param << "J = " << I << "\n";
+            param << "K = " << I << "\n";
+            param << "T = " << T << "\n";
+            param << "NumFile = " << this->num_file << "\n";
+            param << "NumIter = " << this->num_iters_in_file << "\n";
+            param << "NumiterLast = " << N - (num_file - 1) * num_iters_in_file;
+            param.close();
+        }
     }
 
-    _write_to_file_Uz();
-    _write_to_file_Abs_U();
+#pragma omp master
+    {
+        //_write_to_file_Uz();
+        //_write_to_file_Abs_U();
+    }
 
     long int index;
-#pragma omp parallel default(shared) num_threads(4)
     for (int n = 0; n < N; n++)
     {
 #pragma omp for private(index)
@@ -4559,8 +4491,11 @@ void Wave3d::solve()
         }
 
         F(n);
-        _write_to_file_Abs_U();
-        _write_to_file_Uz();
+#pragma omp master
+        {
+            //_write_to_file_Uz();
+            //_write_to_file_Abs_U();
+        }
         //std::cout << "iter " << n << "complete\n";
     }
 }

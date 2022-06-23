@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stddef.h>
 
+#pragma warning(disable : 4996)
+
 struct Vars
 {
 	double u_x;
@@ -75,6 +77,8 @@ private:
 	int rank_coords[2];
 	int size, rank;
 	int left_rank, right_rank, lower_rank, upper_rank;
+
+	int nthreads;
 
 	MPI_Datatype mpi_vars;
 	MPI_Datatype subarray_rw;

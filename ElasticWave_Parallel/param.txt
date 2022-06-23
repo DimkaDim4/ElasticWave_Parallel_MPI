@@ -1,0 +1,8 @@
+N = 48
+I = 100
+J = 100
+K = 100
+T = 0.1
+NumFile = 2
+NumIter = 26
+NumiterLast = 22
